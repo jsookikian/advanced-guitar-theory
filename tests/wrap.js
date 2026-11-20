@@ -1,7 +1,7 @@
 const p=require('puppeteer-core');(async()=>{const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});
 const S=t=>new Promise(r=>setTimeout(r,t));const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
 await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);await pg.setViewport({width:390,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
-await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../src/index.html')).href);await S(800);
+await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../index.html')).href);await S(800);
 const st=()=>pg.evaluate(()=>{const sp=document.getElementById('nine-shape');const m=[0,+sp.dataset.p,+sp.dataset.lo,+sp.dataset.hi];
  const svg=document.getElementById('nine-board');const wl=+svg.getAttribute('aria-label').match(/\d+/)[0];
  const vis=[...svg.querySelectorAll('g[data-vis="1"]')].map(g=>+g.dataset.f);

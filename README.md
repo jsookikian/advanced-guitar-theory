@@ -55,9 +55,8 @@ C dominant pentatonic: **C D E G Bb** (1 9 3 5 b7). Remove C and you get E G Bb 
 You need Node 18 or newer.
 
 ```bash
-cd src
 npm install
-npm run build          # bundles to dist/app.js (a prebuilt copy is included)
+npm run build          # bundles src/main.tsx to app.js at the root (a prebuilt copy is committed)
 open index.html        # or any static server; it works from file://
 npm run serve          # dev server with rebuild on save (esbuild --servedir)
 npx tsc -p .           # type-check (passes)
@@ -71,7 +70,7 @@ npx tsc -p .           # type-check (passes)
 
 ## Tests
 
-The tests are in `tests/`. They use puppeteer-core with headless Chrome against `src/index.html`; build first.
+The tests are in `tests/`. They use puppeteer-core with headless Chrome against `index.html`; build first.
 
 ```bash
 cd tests && npm install
@@ -188,10 +187,14 @@ CHROME=/path/to/chrome node labels2.js
 
 | Folder | Contents |
 |---|---|
-| `src/` | `lesson.tsx` (published source), `grok-canvas-shim.ts`, `main.tsx`, `index.html`, `dist/app.js`, `package.json`, `tsconfig.json` |
+| `src/` | `lesson.tsx` (published source), `grok-canvas-shim.ts`, `main.tsx`; the root holds `index.html`, `app.js` (build output), `package.json`, `tsconfig.json`, `forma.yaml` |
 | `source-material/` | The original sheet: its text, a full-page capture and part captures, plus the first live capture and restyle reference images |
 | `renders/current/` | Renders of the current version: card 1, Explore, wrap at the nut, hover labels, and the standalone build at 390 |
 | `renders/share-samples/` | Share PNGs |
 | `renders/history/` | Renders of earlier versions (14-step lesson and before) |
 | `tests/` | The check scripts above |
 | `CONTEXT.md` | History of the feedback, current state, open items |
+
+## Hosting on Forma
+
+This repo is a Forma Managed web app space (`forma.yaml`, `context/SPACE.md`). Forma serves `index.html` and `app.js` from the repo root. After changing `src/`, run `npm run build` and commit `app.js` with the source.

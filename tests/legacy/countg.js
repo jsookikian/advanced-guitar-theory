@@ -2,7 +2,7 @@ const p=require('puppeteer-core');const fs=require('fs');(async()=>{const b=awai
 const S=t=>new Promise(r=>setTimeout(r,t));const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
 const cdp=await pg.target().createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:require('path').resolve(__dirname,'dl')});
 await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);await pg.setViewport({width:390,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
-await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../src/index.html')).href);await S(800);
+await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../index.html')).href);await S(800);
 const clickIn=(sel,t)=>pg.evaluate((sel,t)=>[...document.querySelectorAll(sel)].find(x=>x.textContent===t).click(),sel,t);
 await pg.click('.nine-icon[aria-label="Display settings"]');await S(300);await clickIn('#nine-settings button','Gm6');await pg.click('.nine-icon[aria-label="Display settings"]');await S(500);
 console.log('card1:',await pg.evaluate(()=>document.querySelector('.nine-card p').textContent));

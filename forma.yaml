@@ -1,0 +1,9 @@
+# What this repo wants from the Forma workspace it links into (forma link).
+workspace: Advanced Guitar Theory
+space:
+  title: Advanced Guitar Theory
+  kind: managed          # static files served flat by path: index.html + app.js at the root
+  subdomain: advanced-guitar-theory
+  source: github         # deploys read this repository
+icon: music
+database: none           # a client-side lesson: no tables, no functions

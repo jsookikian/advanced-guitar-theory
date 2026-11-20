@@ -1,5 +1,5 @@
 const p=require('puppeteer-core');(async()=>{const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
-await pg.setViewport({width:390,height:844});await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../src/index.html')).href);await new Promise(r=>setTimeout(r,1000));
+await pg.setViewport({width:390,height:844});await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../index.html')).href);await new Promise(r=>setTimeout(r,1000));
 const res=await pg.evaluate(async()=>{
  const S=t=>new Promise(r=>setTimeout(r,t));const OP=[4,9,2,7,11,4];
  const LET=['C','D','E','F','G','A','B'],NAT=[0,2,4,5,7,9,11],ST={0:0,2:1,4:2,5:3,7:4,9:5,10:6};

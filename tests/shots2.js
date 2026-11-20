@@ -2,7 +2,7 @@ const p=require('puppeteer-core');(async()=>{const b=await p.launch({executableP
 const S=t=>new Promise(r=>setTimeout(r,t));const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
 await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);
 const vp=W=>pg.setViewport({width:W,height:844,deviceScaleFactor:2,isMobile:W<600,hasTouch:W<600});
-await vp(390);await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../src/index.html')).href);await S(900);
+await vp(390);await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../index.html')).href);await S(900);
 const go=async c=>{await pg.evaluate(c=>document.querySelectorAll('nav[aria-label="Lesson steps"] button')[c].click(),c);await S(500);};
 const clickT=async(sel,t)=>{await pg.evaluate((sel,t)=>[...document.querySelectorAll(sel)].find(b=>b.textContent.trim()===t).click(),sel,t);await S(450);};
 const m=()=>pg.evaluate(()=>{const c=document.querySelector('.nine-card');const bd=document.getElementById('nine-board').getBoundingClientRect();

@@ -1,0 +1,22 @@
+{
+  "name": "advanced-guitar-theory",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Advanced guitar theory: interactive fretboard lessons (a Forma web app space)",
+  "scripts": {
+    "build": "esbuild src/main.tsx --bundle --minify --outfile=app.js --jsx=automatic --alias:grok/canvas=./src/grok-canvas-shim.ts --define:process.env.NODE_ENV='\"production\"'",
+    "watch": "esbuild src/main.tsx --bundle --outfile=app.js --jsx=automatic --alias:grok/canvas=./src/grok-canvas-shim.ts --define:process.env.NODE_ENV='\"development\"' --watch",
+    "serve": "esbuild src/main.tsx --bundle --outfile=app.js --jsx=automatic --alias:grok/canvas=./src/grok-canvas-shim.ts --define:process.env.NODE_ENV='\"development\"' --servedir=. --watch",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.6.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0"
+  }
+}
