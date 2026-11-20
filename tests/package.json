@@ -1,0 +1,1 @@
+{ "name": "lesson-tests", "private": true, "dependencies": { "puppeteer-core": "^23.11.1" } }

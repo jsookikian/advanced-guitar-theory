@@ -1,0 +1,4 @@
+node_modules/
+.forma/
+.env.forma
+.DS_Store

@@ -1,0 +1,15 @@
+const p=require('puppeteer-core');const fs=require('fs');(async()=>{const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});
+const S=t=>new Promise(r=>setTimeout(r,t));const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
+const cdp=await pg.target().createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:require('path').resolve(__dirname,'dl')});
+await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);await pg.setViewport({width:390,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
+await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../src/index.html')).href);await S(800);
+const clickIn=(sel,t)=>pg.evaluate((sel,t)=>[...document.querySelectorAll(sel)].find(x=>x.textContent===t).click(),sel,t);
+await pg.click('.nine-icon[aria-label="Display settings"]');await S(300);await clickIn('#nine-settings button','Gm6');await pg.click('.nine-icon[aria-label="Display settings"]');await S(500);
+console.log('card1:',await pg.evaluate(()=>document.querySelector('.nine-card p').textContent));
+await pg.keyboard.press('ArrowRight');await S(100);await pg.keyboard.press('ArrowRight');await S(500);
+console.log('card3 starts on:',await pg.evaluate(()=>document.querySelector('.nine-card [aria-checked=true]').textContent));
+for(let i=0;i<5;i++){await pg.keyboard.press('ArrowRight');await S(60);} await S(1000);
+console.log('card8:',await pg.evaluate(()=>document.querySelector('.nine-card h2').textContent+' | '+document.querySelector('.nine-card').nextElementSibling.textContent));
+await pg.screenshot({path:'lesson_390_countG_shape2.png'});
+await pg.click('[aria-label="Share this diagram as an image"]');await S(2500);console.log(fs.readdirSync('dl'));
+await b.close();})();
