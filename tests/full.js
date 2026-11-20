@@ -1,8 +1,10 @@
 // Explore card: the scrolling neck keeps the shape centred (also after an arrow step), and both neck modes keep the board's height.
 // Writes full390.png / scroll390.png / scroll320.png to the current directory.
 const p = require('puppeteer-core');
-const url = require('url').pathToFileURL(require('path').resolve(__dirname, '../lessons/dominant-pentatonics/index.html')).href;
+let url;
 (async () => {
+  const site = await require('./site').start();
+  url = site.url('lessons/dominant-pentatonics/index.html');
   const b = await p.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'], headless: 'new' });
   const pg = await b.newPage();
   pg.on('pageerror', e => console.log('ERR', e.message));
@@ -18,11 +20,11 @@ const url = require('url').pathToFileURL(require('path').resolve(__dirname, '../
       const box = (sc || s.parentElement).getBoundingClientRect();
       const vis = [...s.querySelectorAll('g[data-vis="1"] circle')].map(c => { const q = c.getBoundingClientRect(); return q.left + q.width / 2; });
       const mid = (Math.min(...vis) + Math.max(...vis)) / 2;
-      return { boardTop: Math.round(box.top), boxH: Math.round(box.height), scrollable: !!sc && sc.scrollWidth > sc.clientWidth + 10, off: Math.round(mid - (box.left + box.width / 2)), pageSX: document.documentElement.scrollWidth > innerWidth, shape: document.getElementById('nine-shape').dataset.p };
+      return { boardTop: Math.round(box.top), boxH: Math.round(box.height), scrollable: !!sc && sc.scrollWidth > sc.clientWidth + 10, off: Math.round(mid - (box.left + box.width / 2)), pageSX: document.documentElement.scrollWidth > innerWidth, shape: (document.getElementById('nine-shape') || { dataset: {} }).dataset.p };
     });
-    await pg.evaluate(() => [...document.querySelectorAll('nav[aria-label="Lesson steps"] button')][5].click()); await S(400);
+    await pg.evaluate(() => [...document.querySelectorAll('nav[aria-label="Lesson steps"] button')][6].click()); await S(400);
     const drop = await m();
-    await pg.evaluate(() => [...document.querySelectorAll('nav[aria-label="Lesson steps"] button')][6].click()); await S(900);
+    await pg.evaluate(() => [...document.querySelectorAll('nav[aria-label="Lesson steps"] button')][7].click()); await S(900);
     const a = await m();
     if (!a.scrollable) F(W + ' not scrollable');
     if (Math.abs(a.off) > 30) F(W + ' shape off-centre by ' + a.off);
@@ -50,4 +52,5 @@ const url = require('url').pathToFileURL(require('path').resolve(__dirname, '../
   }
   console.log('fails', fails.length);
   await b.close();
+  site.close();
 })();

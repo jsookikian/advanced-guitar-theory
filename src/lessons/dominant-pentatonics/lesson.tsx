@@ -182,6 +182,10 @@ interface BoardProps {
   onPlay?: (s: number, f: number) => void;
   // Scroll mode: called with the fret at the centre of the box once the player stops scrolling by hand.
   onSettle?: (fret: number) => void;
+  // Guided steps: dots (by "string-fret") to fade back so the lit ones stand out.
+  dim?: Set<string>;
+  // Spotlight: a degree whose dots stay lit while every other dot goes nearly dark.
+  spot?: number | null;
 }
 
 // The zoom view's viewBox width: string labels (26) + 7 frets (322) + margin (8). Scroll mode keeps this scale.
@@ -190,7 +194,7 @@ const ZOOM_W = 356;
 const FULL_MARKS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
 
 function Board(props: BoardProps) {
-  const { k, shown, wl, step, labelOf, ringDeg, lefty, drop2, full, band, scroll, center, onPlay, onSettle } = props;
+  const { k, shown, wl, step, labelOf, ringDeg, lefty, drop2, full, band, scroll, center, onPlay, onSettle, dim, spot } = props;
   const scRef = useRef<HTMLDivElement>(null);
   const firstRef = useRef<boolean>(true);
   const progAt = useRef<number>(0);
@@ -283,6 +287,8 @@ function Board(props: BoardProps) {
             const rk = rank.get(key);
             const vis = rk !== undefined;
             const L = look(dot, step, drop2, ringDeg);
+            if (dim && dim.has(key)) { L.dotOp = 0.16; L.textOp = 0.3; }
+            if (spot !== undefined && spot !== null) { if (dot.d === spot) { L.dotOp = 1; L.textOp = 1; if (!dot.add) { const col = dot.d === ringDeg ? RED : dot.d === 2 ? TEAL : INK; L.fill = col; L.stroke = col; L.text = "#ffffff"; L.sw = 0; L.dashed = false; } } else { L.dotOp = 0.07; L.textOp = 0.12; } }
             const delay = vis ? Math.min(rk * 14, 360) : 0;
             const label = labelOf(dot);
             const size = label.length > 2 ? fs - 2 : fs;
@@ -416,9 +422,10 @@ function modeDots(dots: Dot[], m: Mode): Dot[] {
 interface Card { mode: Mode | null; kind: string }
 // The lesson: six idea cards, then Explore. The board arrows move the shape anywhere on the neck on every card.
 const CARDS: Card[] = [
-  { mode: "chord", kind: "c7" },
-  { mode: "arp", kind: "lose" },
-  { mode: "arp", kind: "names" },
+  { mode: "penta", kind: "c7" },
+  { mode: "penta", kind: "lose" },
+  { mode: "penta", kind: "nine" },
+  { mode: "penta", kind: "names" },
   { mode: "penta", kind: "penta" },
   { mode: "mixo", kind: "mixo" },
   { mode: null, kind: "voicing" },
@@ -438,8 +445,23 @@ function instances(k: KeyDef): Pos[] {
 }
 // Short labels for the step chips (the progress row doubles as navigation: any card is one tap away).
 // Third chip: "Synonyms" on a phone, "Chord Synonyms" once there is room (CSS swaps the two spans).
-const STEP_LABEL = ["C7", "No root", "Synonyms", "Pentatonic", "Mixolydian", "Drop", "Explore"];
-const STEP_LONG: Record<number, string> = { 2: "Chord Synonyms" };
+const STEP_LABEL = ["C7", "No root", "The 9", "Synonyms", "Pentatonic", "Mixolydian", "Drop", "Explore"];
+const STEP_LONG: Record<number, string> = { 3: "Chord Synonyms" };
+// The guided steps: each makes one statement on one fixed position (Shape 1), dims every note that is not part of it and lights the ones that are.
+const GUIDED = new Set<string>(["c7", "lose", "nine", "names", "penta", "mixo", "voicing"]);
+// Each guided step is a few beats. A beat says one thing: it lights the notes that sentence is about and dims everything else
+// (the other notes, the page around the board). `lit` is a list of degrees, or "penta" (the pentatonic notes), or a Drop voicing.
+type Lit = number[] | "penta" | "drop2" | "drop3";
+interface BeatSpec { lit: Lit; ring?: number; mode?: Mode; step: Step }
+const BEAT_SPEC: Record<string, BeatSpec[]> = {
+  c7: [{ lit: CHORD, step: 1 }, { lit: [0], step: 1 }, { lit: [4, 7, 10], step: 1 }],
+  lose: [{ lit: [0], step: 1 }, { lit: [4, 7, 10], step: 1 }, { lit: [4, 7, 10], step: 1 }],
+  nine: [{ lit: [2], step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }],
+  names: [{ lit: ARP, ring: 4, step: 2 }, { lit: ARP, ring: 7, step: 2 }, { lit: ARP, ring: 0, step: 2 }],
+  penta: [{ lit: ARP, step: 2 }, { lit: "penta", step: 2 }, { lit: ARP, step: 2 }],
+  mixo: [{ lit: "penta", step: 3 }, { lit: [5, 9], step: 3 }, { lit: [9], step: 3 }, { lit: [5, 4], step: 3 }],
+  voicing: [{ lit: "drop2", mode: "grip", step: 4 }, { lit: "drop3", mode: "drop3", step: 4 }],
+};
 function homeIndex(list: Pos[]): number {
   const i = list.findIndex((q: Pos) => q.p === 0 && q.lo >= 1);
   return i >= 0 ? i : 0;
@@ -447,21 +469,22 @@ function homeIndex(list: Pos[]): number {
 
 export default function App() {
   const [card, setCard] = useState<number>(0);
+  const [beat, setBeat] = useState<number>(0);
   const [dir, setDir] = useState<number>(1);
   const [keyId, setKeyId] = useState<string>("C");
   const [show, setShow] = useState<string>("intervals");
   const [frame, setFrame] = useState<string>("0");
   const [lefty, setLefty] = useState<boolean>(false);
   const [open, setOpen] = useState<boolean>(false);
-  const [cyc, setCyc] = useState<number>(0);
-  const [cycTouched, setCycTouched] = useState<boolean>(false);
   const [layerMode, setLayerMode] = useState<string>("penta");
   const [inst, setInst] = useState<number>(-1);
   const [jump, setJump] = useState<number>(0);
-  const [vKind, setVKind] = useState<string>("grip");
   const [full, setFull] = useState<boolean>(false);
   const [sound, setSound] = useState<InstrumentId>("nylon");
   const [playing, setPlaying] = useState<boolean>(false);
+  // Spotlight: tapping a note name in a statement dims the whole page except that note (a degree 0-11), for a moment.
+  const [spot, setSpot] = useState<number | null>(null);
+  const spotTimer = useRef<number>(0);
   const [tip, setTip] = useState<{ id: string; cx: number; top: number; bottom: number } | null>(null);
   const pressRef = useRef<{ t: number; shown: boolean }>({ t: 0, shown: false });
   useEffect(() => {
@@ -474,53 +497,52 @@ export default function App() {
   const rootRef = useRef<HTMLDivElement>(null);
 
   const total = CARDS.length;
-  const go = (i: number) => {
+  const go = (i: number, b = 0) => {
     const t = Math.max(0, Math.min(total - 1, i));
     setCard((c: number) => { setDir(t >= c ? 1 : -1); return t; });
-    if (t === 2) { setCyc(Number(frameRef.current)); setCycTouched(false); }
+    setBeat(b);
   };
   const cardRef = useRef<number>(0);
   cardRef.current = card;
   const frameRef = useRef<string>("0");
   frameRef.current = frame;
+  const navRef = useRef<{ next: () => void; prev: () => void }>({ next: () => {}, prev: () => {} });
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.getAttribute("role") === "radio" || t.getAttribute("role") === "checkbox")) return;
-      if (e.key === "ArrowRight") go(cardRef.current + 1);
-      if (e.key === "ArrowLeft") go(cardRef.current - 1);
+      if (e.key === "ArrowRight") navRef.current.next();
+      if (e.key === "ArrowLeft") navRef.current.prev();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  // Card 3 cycles the same four notes through C9, Eø and Gm6 until the player taps a name.
-  useEffect(() => {
-    if (card !== 2 || cycTouched) return;
-    const t = setInterval(() => setCyc((c: number) => (c === 0 ? 4 : c === 4 ? 7 : 0)), 2400);
-    return () => clearInterval(t);
-  }, [card, cycTouched]);
   // Runs after every render: keeps the sheet's paint locked against host and theme styles.
   useEffect(() => { if (rootRef.current) lockPaint(rootRef.current); });
 
   const k: KeyDef = KEYS.find((x: KeyDef) => x.id === keyId) ?? KEYS[0];
   const seq: Pos[] = useMemo(() => instances(k), [keyId]);
   const C = CARDS[card];
-  const shapeIdx = inst >= 0 && inst < seq.length ? inst : homeIndex(seq);
+  const guided = GUIDED.has(C.kind);
+  const shapeIdx = guided ? homeIndex(seq) : inst >= 0 && inst < seq.length ? inst : homeIndex(seq);
   // Board arrows and swipe step through every shape instance on the neck, on every card, and the position persists.
   // The arrows stop at the nut and at the top of the neck (no wrap-around): Shape buttons and the octave step do the long moves.
   const canShape = (d: number): boolean => { const t = shapeIdx + d; return d !== 0 && t >= 0 && t < seq.length; };
   const stepShape = (d: number): void => {
-    if (!canShape(d)) return;
+    if (guided || !canShape(d)) return;
     setInst(shapeIdx + d);
   };
-  // The same shape one octave up (from the highest copy back to the lowest, with a fade because the board jumps). Open-string
+  // The same shape one octave up or down (from the highest copy up to the lowest and back, with a fade because the board jumps). Open-string
   // shapes at the nut have a moveable twin at the 12th fret; this is how you get between them.
   const copies: number[] = seq.map((q: Pos, i: number) => (q.p === seq[shapeIdx].p ? i : -1)).filter((i: number) => i >= 0);
   const canOctave = copies.length > 1;
-  const octaveShape = (): void => {
+  const octaveShape = (dir: number = 1): void => {
     if (!canOctave) return;
-    const nextIdx = copies.find((i: number) => seq[i].lo > seq[shapeIdx].lo) ?? copies[0];
+    const lo = seq[shapeIdx].lo;
+    const nextIdx = dir > 0
+      ? (copies.find((i: number) => seq[i].lo > lo) ?? copies[0])
+      : ([...copies].reverse().find((i: number) => seq[i].lo < lo) ?? copies[copies.length - 1]);
     setJump((j: number) => j + 1);
     setInst(nextIdx);
   };
@@ -528,20 +550,22 @@ export default function App() {
   const pickShape = (p: number): void => {
     let best = -1;
     seq.forEach((q: Pos, i: number) => { if (q.p === p && (best < 0 || Math.abs(q.lo - seq[shapeIdx].lo) < Math.abs(seq[best].lo - seq[shapeIdx].lo))) best = i; });
-    if (best === shapeIdx) { octaveShape(); return; } // tapping the shape you are on moves it an octave
+    if (best === shapeIdx) { octaveShape(1); return; } // tapping the shape you are on moves it an octave
     if (best < 0) return;
     setInst(best);
   };
   const cur = seq[shapeIdx];
-  const mode: Mode = C.kind === "voicing" ? (vKind as Mode) : C.kind === "explore" ? (layerMode as Mode) : (C.mode as Mode);
+  const bt: BeatSpec | null = guided ? BEAT_SPEC[C.kind][Math.min(beat, BEAT_SPEC[C.kind].length - 1)] : null;
+  const nBeats = guided ? BEAT_SPEC[C.kind].length : 1;
+  const mode: Mode = bt && bt.mode ? bt.mode : C.kind === "explore" ? (layerMode as Mode) : (C.mode as Mode);
   // Explore shows a scrolling neck (full-size dots, shape centred) or, when asked, the whole neck fitted to the screen.
   const onExplore = C.kind === "explore";
   const fullOn = full && onExplore;
   const scrollOn = onExplore && !full;
   // One global label mode: every dot on every card follows Show (Intervals / Notes).
   const intervals = show === "intervals";
-  // One global Count-from frame for every card; card 3 shows its own demo cycle, which starts from (and when tapped, sets) the global frame.
-  const eff = card === 2 ? cyc : Number(frame);
+  // One global Count-from frame for every card; a guided beat can read the notes from another root (the Chord Synonyms beats do).
+  const eff = bt && bt.ring !== undefined ? bt.ring : Number(frame);
   const ringDeg = eff;
   const iv = (d: number): string => ivName(d, eff);
   const n = (d: number): string => spell(k, d);
@@ -552,6 +576,16 @@ export default function App() {
   const ivs = (ds: number[]): string => ds.map(iv).join(" ");
 
   const shown = modeDots(cur.dots, mode);
+  // Guided beats: the notes the sentence is about stay lit; every other note of the position is dimmed.
+  const isLit = (d: Dot): boolean => {
+    if (!bt) return true;
+    const l = bt.lit;
+    if (l === "penta") return !d.add;
+    if (l === "drop2") return cur.drop.has(`${d.s}-${d.f}`);
+    if (l === "drop3") return cur.drop3.has(`${d.s}-${d.f}`);
+    return l.includes(d.d);
+  };
+  const dimSet: Set<string> | undefined = bt ? new Set<string>(shown.filter((d: Dot) => !isLit(d)).map((d: Dot) => `${d.s}-${d.f}`)) : undefined;
   // Sound: tap a lit dot to hear it; the play button plays what is on the board, notes ascending or the chord strummed.
   const playDot = (s: number, f: number): void => { void pluck(OPEN_MIDI[s] + f, 0.8); };
   // After a hand scroll on the Explore neck, the shape nearest the middle becomes current (with a little bias towards staying put).
@@ -576,12 +610,12 @@ export default function App() {
     const set = mode === "grip" ? cur.drop : mode === "drop3" ? cur.drop3 : null;
     const midis = set
       ? [...set].map((key: string) => { const [s, f] = key.split("-").map(Number); return OPEN_MIDI[s] + f; })
-      : shown.map((d: Dot) => OPEN_MIDI[d.s] + d.f);
+      : shown.filter((d: Dot) => !(dimSet && dimSet.has(`${d.s}-${d.f}`))).map((d: Dot) => OPEN_MIDI[d.s] + d.f);
     setPlaying(true);
     void playPhrase({ notes: midis, style: set ? "strum" : "arpeggio", onNote: pulseMidi }).then(() => setPlaying(false));
   };
   // Anything that changes what is on the board silences a phrase that is still playing.
-  useEffect(() => { stopAll(); setPlaying(false); }, [card, shapeIdx, keyId, layerMode, vKind, frame, show]);
+  useEffect(() => { stopAll(); setPlaying(false); window.clearTimeout(spotTimer.current); setSpot(null); }, [card, beat, shapeIdx, keyId, layerMode, frame, show]);
   const labelOf = (d: Dot): string => {
     if (!intervals) return n(d.d);
     return d.d === eff ? "R" : iv(d.d);
@@ -604,27 +638,97 @@ export default function App() {
   const layerSeg = () => segBtn([{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7], "nine-layers");
 
   const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Seg options={o} value={v} onChange={on} weights={weights} className={className} />;
+  const ink = spot !== null ? "rgba(77,53,51,0.2)" : INK;
   const head = (t: string, extra?: string) => (
-    <h2 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.4px", color: INK, backgroundColor: PAGE, margin: 0 }}>
+    <h2 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.4px", color: ink, transition: "color 260ms ease", backgroundColor: PAGE, margin: 0 }}>
       {t}{extra ? <span style={{ fontFamily: SANS, fontSize: 12.5, color: INK2, backgroundColor: PAGE, letterSpacing: 0, marginLeft: 8 }}>{extra}</span> : null}
     </h2>
   );
-  const line = (t: ReactNode) => <p style={{ fontFamily: SANS, fontSize: 14, fontWeight: 350, lineHeight: "20px", letterSpacing: "-0.14px", color: INK, backgroundColor: PAGE, margin: 0 }}>{t}</p>;
+  const line = (t: ReactNode) => <p style={{ fontFamily: SANS, fontSize: 14, fontWeight: 350, lineHeight: "20px", letterSpacing: "-0.14px", color: ink, transition: "color 260ms ease", backgroundColor: PAGE, margin: 0 }}>{t}</p>;
+  // A note name in a statement is a small bold dot coloured like the board's dots (root red, the 9 teal, the rest ink).
+  // Tapping it lights every dot of that note on the board, dimmed or not, and plays the lowest one.
+  const noteTap = (deg: number): void => {
+    let lowest = -1;
+    setSpot(deg);
+    window.clearTimeout(spotTimer.current);
+    spotTimer.current = window.setTimeout(() => setSpot(null), 1500);
+    document.querySelectorAll('#nine-board g[data-vis="1"]').forEach((g: Element) => {
+      const s = Number(g.getAttribute("data-s"));
+      const f = Number(g.getAttribute("data-f"));
+      if (degOf(s, f, k) !== deg) return;
+      const midi = OPEN_MIDI[s] + f;
+      if (lowest < 0 || midi < lowest) lowest = midi;
+      const c = g.querySelector("circle");
+      if (c && c.animate) c.animate([{ offset: 0.3, opacity: 1, transform: "scale(1.55)" }, { offset: 0.7, opacity: 1, transform: "scale(1.55)" }, { offset: 1 }], { duration: 1100, easing: "ease-in-out" });
+    });
+    if (lowest >= 0) void pluck(lowest, 0.8);
+  };
+  const chip = (deg: number, ring: number = eff): ReactNode => {
+    const bg = deg === ring ? RED : deg === 2 ? TEAL : INK;
+    return (
+      <button key={`chip${deg}`} type="button" className="nine-note" aria-label={`Show ${n(deg)} on the board`} onClick={() => noteTap(deg)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, padding: "0 6px", margin: "0 1px", boxSizing: "border-box", verticalAlign: "baseline", border: 0, borderRadius: 11, cursor: "pointer", fontFamily: SANS, fontSize: 12, fontWeight: 700, lineHeight: "22px", letterSpacing: 0, color: "#ffffff", backgroundColor: bg }}>{n(deg)}</button>
+    );
+  };
+  const chips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`cs${d}`}>{i > 0 ? " " : ""}{chip(d)}</span>);
 
+  const next = (): void => {
+    if (beat < nBeats - 1) { setDir(1); setBeat(beat + 1); } else go(card === total - 1 ? 0 : card + 1);
+  };
+  const prev = (): void => {
+    if (beat > 0) { setDir(-1); setBeat(beat - 1); return; }
+    if (card > 0) { const pk = CARDS[card - 1].kind; go(card - 1, GUIDED.has(pk) ? BEAT_SPEC[pk].length - 1 : 0); }
+  };
+  navRef.current = { next, prev };
+  // The script: for every guided step a heading, and per beat one sentence and the bold chord name shown under the board.
+  const beatContent = (kind: string): { head: string; beats: { text: ReactNode; name: string }[] } => {
+    const dr = (set: Set<string>, label: string): string => `${vname(set)} \u00b7 ${label}`;
+    switch (kind) {
+      case "c7": return { head: `${I}7, the chord.`, beats: [
+        { text: <>{I}7 is four notes: {chips(CHORD)}. The dimmed {chip(2)} is not in the chord.</>, name: `${I}7` },
+        { text: <>{chip(0)} is the root, the note the chord is named for. It is the red R.</>, name: `${I}7` },
+        { text: <>{chip(4)}, {chip(7)} and {chip(10)} are the 3, 5 and b7. They give it the dominant sound.</>, name: `${I}7` },
+      ] };
+      case "lose": return { head: "Lose the root.", beats: [
+        { text: <>In a band the bass player usually plays the root: every {chip(0)} on the board.</>, name: `${I}7` },
+        { text: <>So you can leave it out. Every {chip(0)} fades away.</>, name: `${I}7 no root` },
+        { text: <>{chips([4, 7, 10])} are what is left, and they still say {I}7: the 3, 5 and b7 carry the sound.</>, name: `${I}7 no root` },
+      ] };
+      case "nine": return { head: "Add the 9.", beats: [
+        { text: <>Now add one note: the 9, {chip(2)}. It sits a whole step above the root.</>, name: `${n(2)}, the 9 of ${I}` },
+        { text: <>{chips(ARP)}: four notes again, now with a new colour.</>, name: `${I}9 no root` },
+        { text: <>These four notes, {chips(ARP)}, are {III}{"\u00f8"} or {V}m6</>, name: `${I}9 no root` },
+      ] };
+      case "names": return { head: "Chord Synonyms.", beats: [
+        { text: <>Read the same four notes from {chip(4, 4)}: R, b3, b5, b7. That is {III}{"\u00f8"}.</>, name: `${III}\u00f8` },
+        { text: <>Read them from {chip(7, 7)}: R, b3, 5, 6. That is {V}m6.</>, name: `${V}m6` },
+        { text: <>Over a {chip(0, 0)} bass they are {I}9 with no root. Same notes, three names.</>, name: `${I}9 no root` },
+      ] };
+      case "penta": return { head: "The dominant pentatonic.", beats: [
+        { text: <>Start from those four notes, {chips(ARP)}.</>, name: `${I}9 no root` },
+        { text: <>Put the root back: {chips(PENTA)} is the dominant pentatonic, a box you already know.</>, name: `${I} dominant pentatonic` },
+        { text: <>Inside it hide the {III}{"\u00f8"} and {V}m6 arpeggios you just built.</>, name: `${I} dominant pentatonic` },
+      ] };
+      case "mixo": return { head: `${I} Mixolydian.`, beats: [
+        { text: <>The pentatonic leaves two gaps: no 4 and no 13.</>, name: `${I} dominant pentatonic` },
+        { text: <>Fill them: {chip(5)} and {chip(9)}. That makes {I} Mixolydian.</>, name: `${I} Mixolydian` },
+        { text: <>{chip(9)} is the 13, a safe colour tone over {I}7.</>, name: `${I} Mixolydian` },
+        { text: <>{chip(5)} is the avoid note, a b9 above the 3: pass through it or resolve down to {chip(4)}.</>, name: `${I} Mixolydian` },
+      ] };
+      default: return { head: "Play it as a chord.", beats: [
+        { text: <>Play four of the notes together: Drop 2. That is {III}{"\u00f8"} on the top four strings, or {I}9 without its root.</>, name: dr(cur.drop, "Drop 2") },
+        { text: <>Drop 3: move the top note down to the low E. New bass, new name.</>, name: dr(cur.drop3, "Drop 3") },
+      ] };
+    }
+  };
+  const content = guided ? beatContent(C.kind) : null;
+  const cb = content ? content.beats[Math.min(beat, content.beats.length - 1)] : null;
+  const beatDots = guided ? (
+    <div role="img" aria-label={`Part ${beat + 1} of ${nBeats}`} style={{ display: "flex", gap: 5, height: 8, alignItems: "center", backgroundColor: PAGE }}>
+      {Array.from({ length: nBeats }, (_: unknown, i: number) => <span key={i} style={{ width: i === beat ? 16 : 6, height: 6, borderRadius: 3, backgroundColor: i <= beat ? TEAL : LINE, transition: "width 220ms ease, background-color 220ms ease" }} />)}
+    </div>
+  ) : null;
   let body: ReactNode = null;
-  if (C.kind === "c7") body = <>{head(`Here's ${I}7.`)}{line(`Just the chord tones, ${notes(CHORD)} (1 3 5 b7 of ${I}7). ${eff === 0 ? `R marks the root, ${I}.` : `Counting from ${n(eff)}, so R marks ${n(eff)}.`}`)}</>;
-  else if (C.kind === "lose") body = <>{head("Lose the root, add the 9.")}{line(`The ${I}s fade out, ${n(2)} fades in. These four notes, ${notes(ARP)}, are ${III}ø or ${V}m6`)}</>;
-  else if (C.kind === "names") body = (
-    <>{head("Chord Synonyms.")}{line(`The same four notes, three names: ${I}9 with no root over ${I}, ${III}ø from ${III}, ${V}m6 from ${V}.`)}
-      <div style={{ marginTop: 4 }}>{segBtn([{ value: "0", label: `${I}9` }, { value: "4", label: `${III}ø` }, { value: "7", label: `${V}m6` }], String(cyc), (v: string) => { setCyc(Number(v)); setCycTouched(true); setFrame(v); })}</div></>
-  );
-  else if (C.kind === "penta") body = <>{head("Put the root back: the dominant pentatonic.")}{line(`${notes(PENTA)} (${ivs(PENTA)}). One shape: a scale to run and a chord to arpeggiate.`)}</>;
-  else if (C.kind === "mixo") body = <>{head(`Fill the gaps: ${I} Mixolydian.`)}{line(`${n(5)} and ${n(9)} fade in dashed. Over ${I}7 the 13 (${n(9)}) is safe; the 4 (${n(5)}) is the avoid note, a b9 above the 3 (${n(4)}): pass through it or resolve it down, never sit on it.`)}</>;
-  else if (C.kind === "voicing") body = (
-    <>{head(vKind === "grip" ? "Grab it as a chord." : "Drop 3: new bass, new name.", `${vKind === "grip" ? "Drop 2" : "Drop 3"} \u00b7 ${vname(vKind === "grip" ? cur.drop : cur.drop3)}`)}
-      {line(vKind === "grip" ? `The same four notes stacked: ${III}\u00f8, or ${I}9 without the root. Comp the shape you solo with.` : "Drop 3: the top note drops to the low E, so the bass changes, and so does the name.")}
-      <div style={{ marginTop: 4 }}>{segBtn([{ value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], vKind, (v: string) => setVKind(v))}</div></>
-  );
+  if (content && cb) body = <>{beatDots}{head(content.head)}{line(cb.text)}</>;
   else body = (
     <>{head("Explore the neck.")}{line(cagedLine)}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
   );
@@ -636,11 +740,19 @@ export default function App() {
   if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `4 and 13 (${n(5)} ${n(9)})` : `${n(5)} ${n(9)}, the 4 and 13 of ${I}` });
   if (mode === "grip") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 2" : `Drop 2 \u00b7 ${vname(cur.drop)}` });
   if (mode === "drop3") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 3" : `Drop 3 \u00b7 ${vname(cur.drop3)}` });
+  if (guided && C.kind !== "names") {
+    legendSpec.length = 0;
+    if (C.kind === "c7") { legendSpec.push({ kind: "root", text: `R = root (${n(ringDeg)})` }, { kind: "fill", text: "chord tones" }); }
+    else if (C.kind === "lose") legendSpec.push({ kind: "fill", text: `kept: ${III} ${V} ${n(10)}` });
+    else legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 (${n(2)})` : `${n(2)}, the 9 of ${I}` }, { kind: "fill", text: `${III} ${V} ${n(10)}` });
+  }
   const legend: ReactNode[] = legendSpec.map((it: { kind: KeyKind; text: string }) => <Key key={it.kind + it.text} kind={it.kind}>{it.text}</Key>);
 
   // Share: draw the current diagram onto a 1080x1080 paper-white PNG, then hand it to the share sheet (or download it).
   const LAYER_NAME: Record<Mode, string> = { chord: "Chord tones", arp: "Arpeggio", penta: "Pentatonic", mixo: "Mixolydian", grip: "Drop 2", drop3: "Drop 3" };
   const voicing = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : "";
+  // The bold chord name under the board.
+  const caption = cb ? cb.name : `${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
   const frameBase = eff === 0 ? `${I}9` : eff === 4 ? `${III}\u00f8` : `${V}m6`;
   const shareHead = `${shapeLabel(cur)}: ${CAGED[eff][cur.p]} shape from ${n(eff)} \u00b7 ${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
   const shareMeta = `Key of ${keyId} \u00b7 ${intervals ? `Intervals from ${frameBase}` : "Note names"}`;
@@ -763,13 +875,13 @@ export default function App() {
     if (!q) return d < 0 ? "This is the lowest copy, at the nut" : "This is the highest copy";
     return `${shapeLabel(q)} \u00b7 frets ${q.lo}\u2013${q.hi}`;
   };
-  const STEP_TITLE = [`Here's ${I}7`, "Lose the root, add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop 2 and Drop 3", "Explore the whole neck"];
+  const STEP_TITLE = [`${I}7 is four notes`, "Lose the root", "Add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 13`, "Drop 2 and Drop 3", "Explore the whole neck"];
   const tipText = (id: string): string => {
     if (id.startsWith("step")) { const i = Number(id.slice(4)); return `${i + 1} \u00b7 ${STEP_TITLE[i]}`; }
     if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? " \u00b7 tap again for the next octave" : ""}`; }
     if (id === "prev") return nb(-1);
     if (id === "next") return nb(1);
-    if (id === "octave") return canOctave ? "Same shape, next octave (from the top, back to the nut)" : "This shape has only one copy";
+    if (id === "octave-up" || id === "octave-down") return !canOctave ? "This shape has only one copy" : id === "octave-up" ? "Same shape, one octave up (from the top, back to the nut)" : "Same shape, one octave down (from the nut, to the top)";
     if (id === "play") return playing ? "Stop" : "Play what is shown";
     if (id === "settings") return open ? "Hide settings" : "Settings: labels, key, neck, share";
     return "";
@@ -806,9 +918,12 @@ export default function App() {
     + " @media (max-width:380px){#nine-root .nine-layers button{font-size:11.5px!important;padding:0 1px!important}}"
     + " #nine-root .nine-long{display:none} @media (min-width:560px){#nine-root .nine-short{display:none} #nine-root .nine-long{display:inline}}"
     + " @media (max-width:380px){#nine-root .nine-step span:last-child{font-size:10px!important}}"
-    + " @media (max-width:340px){#nine-root .nine-step span:last-child{font-size:9.5px!important}}"
+    + " @media (max-width:340px){#nine-root .nine-step span:last-child{font-size:9px!important;letter-spacing:-.1px} #nine-root nav[aria-label='Lesson steps']{gap:1px!important}}"
     + " #nine-root .nine-shbtn{display:flex;align-items:center;justify-content:center;gap:5px;flex-direction:row;overflow:hidden} #nine-root .nine-shbtn .cap{font-size:12px;line-height:14px;font-weight:500} #nine-root .nine-shbtn .num{font-size:14px;line-height:16px;font-weight:600}"
     + " @media (max-width:380px){#nine-root .nine-shbtn{flex-direction:column;gap:0} #nine-root .nine-shbtn .cap{font-size:9.5px;line-height:10px} #nine-root .nine-shbtn .num{font-size:15px;line-height:17px}}"
+    + " #nine-root .nine-q{transition:opacity 260ms ease}"
+    + " #nine-root[data-guided='1'] .nine-quiet{opacity:.42} #nine-root[data-guided='1'] .nine-quiet:hover,#nine-root[data-guided='1'] .nine-quiet:focus-within{opacity:1}"
+    + " #nine-root[data-spot='1'] .nine-q,#nine-root[data-spot='1'] .nine-quiet{opacity:.14!important}"
     + " @keyframes nine-in{from{opacity:0}to{opacity:1}} @keyframes nine-lbl{from{opacity:0}to{opacity:1}}"
     + " @keyframes nine-r{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}} @keyframes nine-l{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}"
     + " @keyframes nine-pop{from{opacity:0;transform:translateY(-4px) scale(.96)}to{opacity:1;transform:none}}"
@@ -817,16 +932,16 @@ export default function App() {
     + " html,body{overflow-x:hidden!important;max-width:100%} #nine-root{overflow-x:clip;max-width:100vw} #nine-root svg{max-width:100%}";
 
   return (
-    <div ref={rootRef} id="nine-root" className="nine-root" style={{ backgroundColor: PAGE, color: INK, colorScheme: "only light", minHeight: "100vh", width: "100%", padding: "12px 16px 16px", fontFamily: SANS, boxSizing: "border-box" }}>
+    <div ref={rootRef} id="nine-root" className="nine-root" data-spot={spot !== null ? "1" : "0"} data-guided={guided ? "1" : "0"} style={{ backgroundColor: PAGE, color: INK, colorScheme: "only light", minHeight: "100vh", width: "100%", padding: "12px 16px 16px", fontFamily: SANS, boxSizing: "border-box" }}>
       <style>{css}</style>
       <div style={{ maxWidth: 640, margin: "0 auto", backgroundColor: PAGE, color: INK, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, backgroundColor: PAGE }}>
+        <div className="nine-q nine-quiet" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, backgroundColor: PAGE }}>
           <h1 style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.5px", color: INK, backgroundColor: PAGE, margin: 0 }}>Dominant Pentatonics</h1>
-          <a href="../../index.html" style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 12.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE, textDecoration: "none" }}>{"← All lessons"}</a>
+          <a href="/" style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 12.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE, textDecoration: "none" }}>{"← All lessons"}</a>
         </div>
 
         {/* Step chips: progress and navigation in one row. The bar fills up to the current card; tap any chip to jump. */}
-        <nav aria-label="Lesson steps" style={{ display: "grid", gridTemplateColumns: STEP_LABEL.map((lb: string, i: number) => `minmax(28px,${lb.length + (STEP_LONG[i] ? 4 : 2)}fr)`).join(" "), gap: 3, backgroundColor: PAGE }}>
+        <nav aria-label="Lesson steps" className="nine-q nine-quiet" style={{ display: "grid", gridTemplateColumns: STEP_LABEL.map((lb: string, i: number) => `minmax(28px,${lb.length + (STEP_LONG[i] ? 4 : 2)}fr)`).join(" "), gap: 3, backgroundColor: PAGE }}>
           {STEP_LABEL.map((lb: string, i: number) => (
             <button key={lb} type="button" className="nine-step" aria-label={`Step ${i + 1} of ${total}: ${STEP_LONG[i] ?? lb}`} aria-current={i === card ? "step" : undefined} {...tipOn(`step${i}`)} onClick={() => go(i)} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, height: 32, minWidth: 0, padding: "2px 0", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <span style={{ display: "block", height: 4, borderRadius: 2, backgroundColor: i <= card ? TEAL : LINE, transition: "background-color 300ms ease" }} />
@@ -836,22 +951,33 @@ export default function App() {
         </nav>
 
         <div className={C.kind === "explore" ? "nine-card nine-tall" : "nine-card"} style={{ position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", backgroundColor: PAGE }}>
-          <div key={`card${card}`} style={{ display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
+          <div key={`card${card}-${beat}`} style={{ display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
         </div>
 
-        <div style={{ minHeight: 34, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
+        <div className="nine-q" style={{ minHeight: 34, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", backgroundColor: PAGE }}>
             <span key={`lg${mode}${ringDeg}${keyId}`} style={{ display: "flex", flexWrap: "wrap", minWidth: 0, columnGap: 12, rowGap: 2, animation: "nine-in 320ms ease both", backgroundColor: PAGE }}>
               {legend}
             </span>
           </div>
-            <button type="button" className="nine-icon" id="nine-octave" aria-label="Same shape, next octave" {...tipOn("octave")} disabled={!canOctave} onClick={octaveShape} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, minWidth: 32, padding: "0 2px", margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: canOctave ? "pointer" : "default", opacity: canOctave ? 1 : 0.3, fontFamily: SANS, fontSize: 12.5, fontWeight: 600, letterSpacing: "0.01em", color: INK, backgroundColor: PAGE }}>8va</button>
+            <div role="radiogroup" id="nine-show" aria-label="Show intervals or note names" className="nine-q" style={{ display: "inline-flex", flex: "0 0 auto", height: 24, border: `1px solid ${LINE_UI}`, borderRadius: 12, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
+              {[["intervals", "Intervals"], ["notes", "Notes"]].map(([v, lb]: string[]) => (
+                <button key={v} type="button" role="radio" aria-checked={show === v} onClick={() => setShow(v)} style={{ height: "100%", padding: "0 8px", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "22px", color: show === v ? PAGE : INK, backgroundColor: show === v ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease" }}>{lb}</button>
+              ))}
+            </div>
+            {!guided ? (<>
+            <div role="group" id="nine-octave" aria-label="Move this shape by an octave" className="nine-q" style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto", height: 24, border: `1px solid ${LINE_UI}`, borderRadius: 12, overflow: "hidden", boxSizing: "border-box", opacity: canOctave ? 1 : 0.35, backgroundColor: PAGE }}>
+              <button type="button" id="nine-octave-down" aria-label="Octave down" {...tipOn("octave-down")} disabled={!canOctave} onClick={() => octaveShape(-1)} style={{ height: "100%", width: 22, padding: 0, border: 0, borderRadius: 0, boxShadow: "none", cursor: canOctave ? "pointer" : "default", fontFamily: SANS, fontSize: 14, fontWeight: 600, lineHeight: "20px", color: INK, backgroundColor: PAGE }}>{"\u2212"}</button>
+              <span style={{ padding: "0 1px", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "22px", color: INK, backgroundColor: PAGE }}>Octave</span>
+              <button type="button" id="nine-octave-up" aria-label="Octave up" {...tipOn("octave-up")} disabled={!canOctave} onClick={() => octaveShape(1)} style={{ height: "100%", width: 22, padding: 0, border: 0, borderRadius: 0, boxShadow: "none", cursor: canOctave ? "pointer" : "default", fontFamily: SANS, fontSize: 14, fontWeight: 600, lineHeight: "20px", color: INK, backgroundColor: PAGE }}>+</button>
+            </div>
             <button type="button" className="nine-icon" id="nine-play" aria-label={playing ? "Stop" : "Play what is shown"} aria-pressed={playing} {...tipOn("play")} onClick={playShown} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
                 {playing ? <rect x={4.5} y={4.5} width={9} height={9} rx={1.5} strokeWidth={1.4} style={{ fill: INK, stroke: INK }} /> : <path d="M5 3.2 L14.4 9 L5 14.8 Z" strokeWidth={1.4} strokeLinejoin="round" style={{ fill: PAGE, stroke: INK }} />}
               </svg>
             </button>
-            <button type="button" className="nine-icon" aria-label="Display settings" aria-controls="nine-settings" aria-expanded={open} {...tipOn("settings")} onClick={() => setOpen(!open)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 3, height: 32, minWidth: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", outlineOffset: 2, cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+            </>) : null}
+            <button type="button" className="nine-icon nine-quiet" aria-label="Display settings" aria-controls="nine-settings" aria-expanded={open} {...tipOn("settings")} onClick={() => setOpen(!open)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 3, height: 32, minWidth: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", outlineOffset: 2, cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
                 {[[4, 6], [9, 12], [14, 8]].map((yx: number[]) => (
                   <g key={yx[0]}>
@@ -870,14 +996,9 @@ export default function App() {
         <div id="nine-settings" aria-hidden={!open} style={{ display: "grid", gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0, marginTop: open ? 0 : -8, visibility: open ? "visible" : "hidden", transition: `grid-template-rows 280ms ${EASE}, margin-top 280ms ${EASE}, opacity 220ms ease, visibility 0s linear ${open ? 0 : 280}ms`, backgroundColor: PAGE }}>
           <div style={{ minHeight: 0, overflow: "hidden", backgroundColor: PAGE }}>
               <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, backgroundColor: PAGE, color: INK, border: `1px solid ${LINE}`, borderRadius: 12 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, backgroundColor: PAGE }}>
-                <Field label="Show">
-                  <Seg options={[{ value: "intervals", label: "Intervals" }, { value: "notes", label: "Notes" }]} value={show} onChange={(v: string) => setShow(v)} />
-                </Field>
                 <Field label="Count from" style={{ opacity: show === "intervals" ? 1 : 0.35, pointerEvents: show === "intervals" ? "auto" : "none", transition: "opacity 200ms ease" }}>
                   <Seg options={[{ value: "0", label: `${I}9` }, { value: "4", label: `${III}ø` }, { value: "7", label: `${V}m6` }]} value={frame} onChange={(v: string) => setFrame(v)} />
                 </Field>
-                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 16, alignItems: "center", backgroundColor: PAGE }}>
                   <Field label="" style={{ gap: 0 }}>
                     <select value={keyId} onChange={(e: ChangeEvent<HTMLSelectElement>) => { const nk = KEYS.find((x: KeyDef) => x.id === e.target.value) ?? KEYS[0]; const list = instances(nk); let best = homeIndex(list); list.forEach((q: Pos, i: number) => { if (q.p === cur.p && (list[best].p !== cur.p || Math.abs(q.lo - cur.lo) < Math.abs(list[best].lo - cur.lo))) best = i; }); setInst(best); setKeyId(e.target.value); }} style={{ height: CH, width: "100%", boxSizing: "border-box", fontFamily: SANS, fontSize: CFS, fontWeight: 500, color: INK, backgroundColor: PAGE, border: BORDER, borderRadius: RAD, padding: "0 26px 0 12px", lineHeight: "18px", colorScheme: "only light", cursor: "pointer", backgroundImage: "linear-gradient(45deg, transparent 50%, #4d3533 50%), linear-gradient(135deg, #4d3533 50%, transparent 50%)", backgroundPosition: "calc(100% - 15px) 50%, calc(100% - 10px) 50%", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat" }}>
@@ -901,16 +1022,20 @@ export default function App() {
           </div>
         </div>
         {/* Shape row: pick Shape 1-5 directly (nearest position), or use the board arrows / swipe to walk the whole neck. */}
-        <div id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", height: 36, minWidth: 0, border: `1px solid ${LINE_UI}`, borderRadius: RAD, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
+        {guided ? (
+        <button type="button" className="nine-btn nine-q" id="nine-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), width: "100%", height: 36 }}>{playing ? "\u25a0 Stop" : "\u25b6 Hear it"}</button>
+        ) : (
+        <div className="nine-q" id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", height: 36, minWidth: 0, border: `1px solid ${LINE_UI}`, borderRadius: RAD, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
           {[0, 1, 2, 3, 4].map((p: number) => (
             <button key={p} type="button" className="nine-shbtn" role="radio" aria-checked={cur.p === p} aria-label={`Shape ${p + 1}: ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}`} {...tipOn(`shape${p}`)} onClick={() => pickShape(p)} style={{ height: "100%", minWidth: 0, padding: 0, border: 0, borderLeft: p > 0 ? `1px solid ${cur.p === p || cur.p === p - 1 ? "transparent" : LINE_UI}` : 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, color: cur.p === p ? PAGE : INK, backgroundColor: cur.p === p ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease, border-color 200ms ease" }}>
               <span className="cap">Shape</span><span className="num">{p + 1}</span>
             </button>
           ))}
         </div>
+        )}
         <div style={{ position: "relative", backgroundColor: PAGE }} onTouchStart={(e: { touches: ArrayLike<{ clientX: number; clientY: number }> }) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; }} onTouchEnd={(e: { changedTouches: ArrayLike<{ clientX: number; clientY: number }> }) => { const s = touchRef.current; touchRef.current = null; if (!s) return; const t = e.changedTouches[0]; const dx = t.clientX - s.x; const dy = t.clientY - s.y; if (!scrollOn && Math.abs(dx) > 48 && Math.abs(dy) < 36) stepShape(dx < 0 ? (lefty ? -1 : 1) : (lefty ? 1 : -1)); }}>
-          <Board key={`board${jump}-${fullOn ? 1 : 0}-${scrollOn ? 1 : 0}`} full={fullOn} scroll={scrollOn} onPlay={playDot} onSettle={settleScroll} center={(cur.lo + cur.hi) / 2} band={fullOn ? [cur.lo, cur.hi] : undefined} k={k} shown={shown} wl={Math.max(0, Math.min(cur.lo - 1, MAXF - 6))} step={MODE_STEP[mode]} labelOf={labelOf} ringDeg={ringDeg} lefty={lefty} drop2={mode === "drop3" ? cur.drop3 : cur.drop} />
-          {[-1, 1].map((d: number) => {
+          <Board key={`board${jump}-${fullOn ? 1 : 0}-${scrollOn ? 1 : 0}`} full={fullOn} scroll={scrollOn} onPlay={playDot} onSettle={settleScroll} center={(cur.lo + cur.hi) / 2} band={fullOn ? [cur.lo, cur.hi] : undefined} k={k} shown={shown} wl={Math.max(0, Math.min(cur.lo - 1, MAXF - 6))} step={bt ? bt.step : MODE_STEP[mode]} dim={dimSet} spot={spot} labelOf={labelOf} ringDeg={ringDeg} lefty={lefty} drop2={mode === "drop3" ? cur.drop3 : cur.drop} />
+          {(guided ? [] : [-1, 1]).map((d: number) => {
             const ok = canShape(d);
             const onLeft = lefty ? d > 0 : d < 0;
             return (
@@ -922,9 +1047,10 @@ export default function App() {
             );
           })}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
-          <button type="button" className="nine-btn" style={{ ...btn(false, card === 0), height: 44, fontSize: 15 }} disabled={card === 0} onClick={() => go(card - 1)}>{"\u2190 Back"}</button>
-          <button type="button" className="nine-btn nine-btn-primary" style={{ ...btn(true, false), height: 44, fontSize: 15 }} onClick={() => go(card === total - 1 ? 0 : card + 1)}>{card === total - 1 ? "Start over" : "Continue \u2192"}</button>
+        <div id="nine-name" aria-live="polite" style={{ height: 28, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SANS, fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px", color: INK, backgroundColor: PAGE }}>{caption}</div>
+        <div className="nine-q" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
+          <button type="button" className="nine-btn" style={{ ...btn(false, card === 0 && beat === 0), height: 44, fontSize: 15 }} disabled={card === 0 && beat === 0} onClick={() => prev()}>{"\u2190 Back"}</button>
+          <button type="button" className="nine-btn nine-btn-primary" style={{ ...btn(true, false), height: 44, fontSize: 15 }} onClick={() => next()}>{card === total - 1 ? "Start over" : "Continue \u2192"}</button>
         </div>
       </div>
       {tip && tipText(tip.id) ? (() => {

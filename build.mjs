@@ -34,7 +34,7 @@ for (const id of ids) {
 </head>
 <body style="margin:0;background:#fdfcfb">
 <div id="root"></div>
-<script src="app.js"></script>
+<script src="/lessons/${id}/app.js"></script>
 </body>
 </html>
 `);
@@ -42,7 +42,7 @@ for (const id of ids) {
 }
 lessons.sort((a, b) => a.order - b.order);
 
-const items = lessons.map((l) => `    <li><a href="lessons/${l.id}/index.html"><span class="lvl">${esc(l.level)}</span><span class="ttl">${esc(l.title)}</span><span class="sum">${esc(l.summary)}</span></a></li>`).join("\n");
+const items = lessons.map((l) => `    <li><a href="/lessons/${l.id}/index.html"><span class="lvl">${esc(l.level)}</span><span class="ttl">${esc(l.title)}</span><span class="sum">${esc(l.summary)}</span></a></li>`).join("\n");
 writeFileSync("index.html", `<!doctype html>
 <html lang="en">
 <head>

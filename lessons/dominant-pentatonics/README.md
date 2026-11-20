@@ -69,7 +69,7 @@ npm run typecheck      # tsc -p . (passes)
 
 ## Tests
 
-The tests are in `tests/`. They use puppeteer-core with headless Chrome against `lessons/dominant-pentatonics/index.html`; build first.
+The tests are in `tests/`. They use puppeteer-core with headless Chrome against the lesson page, served by `tests/site.js` (a tiny static server over the repo root: the pages use root-absolute asset paths because Forma serves every page with `<base href="/">`, so they can't be opened from `file://`). Build first.
 
 ```bash
 cd tests && npm install
@@ -113,30 +113,44 @@ CHROME=/path/to/chrome node labels2.js
 - All 150 or so possible scale dots are drawn once and fade or scale in and out, so moving between layers and shapes is animated.
 - Fret numbers sit about 12px below the low-E dots.
 - The ‹ › arrows and swipe step through the shape list and stop at the ends (no wrap-around).
-- **Octave step:** the same shape one octave up, from the highest copy back to the lowest, with a 300 ms fade (the board remounts) because the board jumps. Two ways in: the "8va" button in the legend row, and tapping the Shape button you are already on (its tooltip says so). This is how you get between the open-string copy at the nut and its moveable twin at the 12th fret. Disabled when a shape has only one copy (Shape 4 in D).
+- **Octave step** (Explore): the same shape one octave up or down, from the highest copy up to the lowest and back, with a 300 ms fade (the board remounts) because the board jumps. Two ways in: the small "− Octave +" pair in the legend row, and tapping the Shape button you are already on (it goes up; its tooltip says so). This is how you get between the open-string copy at the nut and its moveable twin at the 12th fret. Disabled when a shape has only one copy (Shape 4 in D).
 - **Scrolling neck** (the Explore card's default, `scroll` prop): the whole neck, frets 0–24, is drawn at the same dot size as the zoom view inside a native horizontally scrolling box (`#nine-scroll`), so a phone user can swipe along it. When the player scrolls by hand and stops, the shape nearest the middle becomes the current one (the Shape bar, legend and lit dots follow), so the screen never shows an unlit stretch of neck; scrolls the page started itself are ignored. The shape is centred in the box: on mount the placement is instant (so a wrap fades in already centred), and after an arrow or Shape button the box glides to the new shape. The string names are pinned over the left edge (right edge when left-handed). The board's width, height and dot size equal the zoom view's, so nothing around it moves. Swipe-to-step is turned off here because a horizontal swipe scrolls instead; the arrows and Shape buttons still step.
 - **Fit all** (Settings → Neck): the `full` prop draws frets 0–24 at once in the zoom view's viewBox (about 12.8 units per fret, dots of radius 6.3 with 7.5px labels, only the marker frets numbered). Only the current shape is lit, on a faint teal band that slides as the shape changes. The choice is kept while you stay on Explore.
 - The other six cards keep the 7-fret window that slides with a CSS transform. Share copies the live SVG, so on Explore it shares the whole neck.
 
-**Cards (`CARDS`, 7)**
-1. C7
-2. No root
-3. Chord Synonyms: same notes, three names (also sets Count from)
-4. Pentatonic
-5. Mixolydian
-6. Drop: Drop 2 | Drop 3 toggle
-7. Explore: the scrolling neck with the five layer buttons (Arpeggio, Pentatonic, Mixolydian, Drop 2, Drop 3) on the card. Practice and Quiz were removed on purpose until there is a better plan for how to practise this; see `CONTEXT.md`.
+**The lesson: 7 guided steps and Explore (`CARDS`, `BEAT_SPEC`, `beatContent`)**
 
-The progress chips read C7, No root, Synonyms, Pentatonic, Mixolydian, Drop, Explore. The third chip reads "Synonyms" below 560px wide and "Chord Synonyms" above (a CSS swap, so it fits at 320). Chip widths follow label length.
+Each guided step is a short run of **beats**. A beat makes one statement, lights only the notes that statement is about and dims everything else. Continue and Back walk through the beats and then on to the next step; the small dots above the heading show the beat. Guided steps are pinned to Shape 1 (so the board never moves), have no shape bar or arrows, and have a full-width "Hear it" button (it plays the lit notes, each pulsing as it sounds) where the shape bar would be.
+
+| Step | Beats |
+|---|---|
+| C7, the chord | the four chord tones (the unused 9 dimmed) · the root alone, red · the 3, 5 and b7 |
+| Lose the root | the roots alone ("the bass player covers this") · the roots fade out · what is left still says C7 |
+| Add the 9 | the 9 alone, teal · the four notes again · "These four notes, E G Bb D, are Eø or Gm6" |
+| Chord Synonyms | the same four notes read from E (R b3 b5 b7, Eø) · from G (Gm6) · over a C bass (C9 no root) |
+| The dominant pentatonic | the four notes · the root comes back · the arpeggios hidden inside |
+| C Mixolydian | the two gaps · F and A fill them · A is the 13 · F is the avoid note |
+| Play it as a chord | Drop 2 · Drop 3 |
+| Explore | the free neck (below) |
+
+How the dimming works: `BEAT_SPEC` says per beat which degrees (or "penta", "drop2", "drop3") are lit, which root the labels count from (`ring`) and which look to use; `Board` fades every other dot (`dim`). The page around the board is dimmed too: on guided steps the title row, progress chips and settings button sit at about 40% (they come back on hover or focus), and tapping a note name in a sentence runs a **spotlight**: for 1.5 s everything else (all text, controls, every other dot) drops to almost nothing, and that note's dots light in the chip's colour (root red, the 9 teal, the rest ink) and play.
+
+Note names in the sentences are small bold dots (`chip`) in the same colours as the board's dots.
+
+Under the board, bold and centred, is the **chord name** for the current beat ("C7", "C7 no root", "C9 no root", "Eø", "Gm6", "C dominant pentatonic", "C Mixolydian", "C9 no root · Drop 2"). On Explore it names the layer.
+
+The chips read C7 · No root · The 9 · Synonyms · Pentatonic · Mixolydian · Drop · Explore. "Synonyms" reads "Chord Synonyms" at 560px and wider (a CSS swap, so it fits at 320). Chip widths follow label length, with a 28px minimum, and the type steps down at 340px.
+
+**Explore:** the scrolling neck with the five layer buttons (Arpeggio, Pentatonic, Mixolydian, Drop 2, Drop 3) on the card, the Shape 1-5 bar and the arrows. Practice and Quiz were removed on purpose until there is a better plan for how to practise this; see `CONTEXT.md`.
 
 **Navigation**
-- The labelled progress segments are tappable, so any card is one tap away. Back / Continue are also there.
-- The **Shape 1** to **Shape 5** buttons are a full-width segmented control above the board that jumps to the nearest copy of that shape. At 380px and narrower each button stacks a small "Shape" caption over a larger number. There is no shape name or fret caption beside them.
-- The position on the neck carries across cards.
-- Changing key keeps the same shape at the nearest position.
+- Back / Continue (and the arrow keys) walk the beats, then the steps. The progress chips jump to the start of any step.
+- On Explore, the **Shape 1** to **Shape 5** buttons are a full-width segmented control above the board that jumps to the nearest copy of that shape. At 380px and narrower each button stacks a small "Shape" caption over a larger number. There is no shape name or fret caption beside them.
+- The position on the neck carries across Explore; changing key keeps the same shape at the nearest position.
+
+**Intervals | Notes** is a small pill in the legend row, always visible (it is not in Settings).
 
 **Settings** (sliders icon and chevron in the legend row; an inline panel that stays open across cards)
-- Show: Intervals / Notes
 - Count from: C9 / Eø / Gm6. This one setting applies to every card.
 - Sound: Nylon acoustic (default) / Steel acoustic / Jazz electric. Built out later.
 - Key (12 keys)
@@ -182,7 +196,7 @@ The progress chips read C7, No root, Synonyms, Pentatonic, Mixolydian, Drop, Exp
 
 **Roots:** every root is a red filled dot labelled **R**. With Notes on, it shows the note name instead.
 
-**Text placement:** all copy sits **above** the board. Nothing goes below the board except Back / Continue.
+**Text placement:** all copy sits **above** the board, with one exception Jordan asked for: the chord name, bold and centred, directly under the board. Below that only Back / Continue.
 
 **No layout shift**
 - Cards have a fixed height with text aligned to the bottom, so the board never moves between cards 1–6. The Explore card is 26px taller, on purpose.
@@ -196,7 +210,7 @@ The progress chips read C7, No root, Synonyms, Pentatonic, Mixolydian, Drop, Exp
 - Short, teaching tone, and it says *why* the pieces fit together.
 - The 4 and 6 over a dominant are written as the 4 and the 13. The 4 is called the avoid note (a b9 above the 3). Over Eø the same note shows as b9, never b2.
 - "Drop 2" / "Drop 3", never "grip" in visible text.
-- Card 2's text is exact: "The Cs fade out, D fades in. These four notes, E G Bb D, are Eø or Gm6" (it follows the key, no full stop).
+- Jordan's wording "These four notes, E G Bb D, are Eø or Gm6" (it follows the key, no full stop) is the last beat of "Add the 9". The other beats are new copy, to be edited.
 
 **Motion:** fades and slides of about 120–560 ms.
 

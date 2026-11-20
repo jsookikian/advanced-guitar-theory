@@ -29,7 +29,7 @@ npm run serve        # static server on http://localhost:8000
 npm run typecheck
 ```
 
-Run the browser checks from `tests/` (see `lessons/dominant-pentatonics/README.md`).
+Run the browser checks from `tests/` (see `lessons/dominant-pentatonics/README.md`). They start their own small static server, so nothing else needs to be running.
 
 ## Adding a lesson
 
@@ -42,4 +42,4 @@ House rules every lesson follows (from lesson 1): white paper look, light only, 
 
 ## Forma
 
-This repo is a Forma Managed web app space. The platform serves it flat by path: the catalog at `/`, a lesson at `/lessons/<id>/index.html`. Our organization allows only `sqsp` GitHub repositories as a deploy source, so the space is bound by files upload rather than to this repo: after changes, from the repo root, run `forma redeploy` (the CLI needs `forma login --server https://tryforma.com` once). Nothing is deployed from a push.
+This repo is a Forma Managed web app space. The platform serves it flat by path: the catalog at `/`, a lesson at `/lessons/<id>/index.html`. Our organization allows only `sqsp` GitHub repositories as a deploy source, so the space is bound by files upload rather than to this repo: after changes, from the repo root, run `forma redeploy` (the CLI needs `forma login --server https://tryforma.com` once). Nothing is deployed from a push. Forma serves every page with `<base href="/">`, so pages and scripts use root-absolute paths (`/lessons/<id>/app.js`, `/sounds/`). Use `forma redeploy --clean` when files have moved or been removed, because a plain redeploy does not delete old files.

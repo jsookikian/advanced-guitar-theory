@@ -1,13 +1,13 @@
-const p=require('puppeteer-core');(async()=>{const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});
+const p=require('puppeteer-core');(async()=>{const site=await require('./site').start();const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});
 const S=t=>new Promise(r=>setTimeout(r,t));const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
 await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);await pg.setViewport({width:390,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
-await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../lessons/dominant-pentatonics/index.html')).href);await S(800);
+await pg.goto(site.url('lessons/dominant-pentatonics/index.html'));await S(800);
 const st=()=>pg.evaluate(()=>{const sp=document.getElementById('nine-shape');const m=[0,+sp.dataset.p,+sp.dataset.lo,+sp.dataset.hi];
  const svg=document.getElementById('nine-board');const wl=+svg.getAttribute('aria-label').match(/\d+/)[0];
  const vis=[...svg.querySelectorAll('g[data-vis="1"]')].map(g=>+g.dataset.f);
  if(!svg.__id) svg.__id=Math.random();
  return {p:m[1],lo:m[2],hi:m[3],wl,vmin:Math.min(...vis),vmax:Math.max(...vis),nv:vis.length,sid:svg.__id,txt:'Shape '+m[1]+' '+sp.textContent}});
-await pg.click('.nine-icon[aria-label="Display settings"]');await S(400);
+await pg.evaluate(()=>[...document.querySelectorAll('nav[aria-label="Lesson steps"] button')][7].click());await S(300);await pg.click('.nine-icon[aria-label="Display settings"]');await S(400);
 let fails=0;const F=m=>{fails++;console.log('FAIL',m)};const summary=[];
 for(const key of (process.env.KEYS||'C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B').split(',')){
  const ok=await pg.evaluate(k=>{const s=document.querySelector('select');const o=[...s.options].find(o=>o.value===k);return !!o},key); if(!ok){F('no key '+key);continue;}
@@ -23,19 +23,20 @@ for(const key of (process.env.KEYS||'C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B').split(',')){
   s=n;}
  if(!(await dis('.nine-arrow[aria-label^="Next"]')))F(key+' Next never disabled at the top');
  // Octave: tapping the selected Shape button and the 8va button both move the same shape up 12 frets, and from the highest copy back to the lowest, with a remount.
- for(const how of ['8va','tap']){
+ for(const how of ['up','tap','down']){
   for(let sh=1;sh<=5;sh++){
    const L=list.filter(q=>q.p===sh);if(L.length<2)continue;
    await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);await S(200);
    let c=await st();
    // go to this shape's lowest copy first
-   for(let g=0;g<4&&c.lo!==L[0].lo;g++){await pg.evaluate(()=>document.getElementById('nine-octave').click());await S(120);c=await st();}
+   for(let g=0;g<4&&c.lo!==L[0].lo;g++){await pg.evaluate(()=>document.getElementById('nine-octave-up').click());await S(120);c=await st();}
    for(let i=1;i<=L.length;i++){
     const before=c;
-    if(how==='8va')await pg.evaluate(()=>document.getElementById('nine-octave').click());
+    if(how==='up')await pg.evaluate(()=>document.getElementById('nine-octave-up').click());
+    else if(how==='down')await pg.evaluate(()=>document.getElementById('nine-octave-down').click());
     else await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);
     await S(160);c=await st();
-    const want=L[i%L.length];
+    const want=how==='down'?L[(L.length-i)%L.length]:L[i%L.length];
     if(c.p!==sh||c.lo!==want.lo)F(key+' '+how+' shape '+sh+' step '+i+' went to '+c.txt+' wanted '+want.lo);
     if(c.sid===before.sid)F(key+' '+how+' no remount');
    }
@@ -54,4 +55,4 @@ for(const key of (process.env.KEYS||'C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B').split(',')){
  // shapes chain: top of one = bottom of next in sequence order by shape p (consecutive in list)
  summary.push(key+': '+list.length+' ['+list.map(q=>q.p+'@'+q.lo+'-'+q.hi).join(' ')+']');
 }
-console.log(summary.join('\n'));console.log('fails',fails);await b.close();})();
+console.log(summary.join('\n'));console.log('fails',fails);await b.close();site.close();})();
