@@ -508,19 +508,28 @@ export default function App() {
   const C = CARDS[card];
   const shapeIdx = inst >= 0 && inst < seq.length ? inst : homeIndex(seq);
   // Board arrows and swipe step through every shape instance on the neck, on every card, and the position persists.
-  // Past either end wraps to the other end with a quick fade instead of a 20-fret slide.
-  const canShape = (d: number): boolean => seq.length > 1 && d !== 0;
+  // The arrows stop at the nut and at the top of the neck (no wrap-around): Shape buttons and the octave step do the long moves.
+  const canShape = (d: number): boolean => { const t = shapeIdx + d; return d !== 0 && t >= 0 && t < seq.length; };
   const stepShape = (d: number): void => {
-    const raw = shapeIdx + d;
-    const t = (raw + seq.length) % seq.length;
-    if (raw !== t) setJump((j: number) => j + 1);
-    setInst(t);
+    if (!canShape(d)) return;
+    setInst(shapeIdx + d);
+  };
+  // The same shape one octave up (from the highest copy back to the lowest, with a fade because the board jumps). Open-string
+  // shapes at the nut have a moveable twin at the 12th fret; this is how you get between them.
+  const copies: number[] = seq.map((q: Pos, i: number) => (q.p === seq[shapeIdx].p ? i : -1)).filter((i: number) => i >= 0);
+  const canOctave = copies.length > 1;
+  const octaveShape = (): void => {
+    if (!canOctave) return;
+    const nextIdx = copies.find((i: number) => seq[i].lo > seq[shapeIdx].lo) ?? copies[0];
+    setJump((j: number) => j + 1);
+    setInst(nextIdx);
   };
   // Direct shape pick: the same shape number nearest the current position, so the board barely moves.
   const pickShape = (p: number): void => {
     let best = -1;
     seq.forEach((q: Pos, i: number) => { if (q.p === p && (best < 0 || Math.abs(q.lo - seq[shapeIdx].lo) < Math.abs(seq[best].lo - seq[shapeIdx].lo))) best = i; });
-    if (best < 0 || best === shapeIdx) return;
+    if (best === shapeIdx) { octaveShape(); return; } // tapping the shape you are on moves it an octave
+    if (best < 0) return;
     setInst(best);
   };
   const cur = seq[shapeIdx];
@@ -750,16 +759,17 @@ export default function App() {
   // Hover labels: one styled tooltip for the step segments, shape chips, board arrows, share and settings.
   // Mouse hover and keyboard focus-visible show it; on touch a long-press shows it briefly (a tap still acts).
   const nb = (d: number): string => {
-    const raw = shapeIdx + d;
-    const q = seq[(raw + seq.length) % seq.length];
-    return `${shapeLabel(q)} \u00b7 frets ${q.lo}\u2013${q.hi}${raw < 0 ? " (wraps to the top)" : raw >= seq.length ? " (wraps to the nut)" : ""}`;
+    const q = seq[shapeIdx + d];
+    if (!q) return d < 0 ? "This is the lowest copy, at the nut" : "This is the highest copy";
+    return `${shapeLabel(q)} \u00b7 frets ${q.lo}\u2013${q.hi}`;
   };
   const STEP_TITLE = [`Here's ${I}7`, "Lose the root, add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop 2 and Drop 3", "Explore the whole neck"];
   const tipText = (id: string): string => {
     if (id.startsWith("step")) { const i = Number(id.slice(4)); return `${i + 1} \u00b7 ${STEP_TITLE[i]}`; }
-    if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}`; }
+    if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? " \u00b7 tap again for the next octave" : ""}`; }
     if (id === "prev") return nb(-1);
     if (id === "next") return nb(1);
+    if (id === "octave") return canOctave ? "Same shape, next octave (from the top, back to the nut)" : "This shape has only one copy";
     if (id === "play") return playing ? "Stop" : "Play what is shown";
     if (id === "settings") return open ? "Hide settings" : "Settings: labels, key, neck, share";
     return "";
@@ -835,6 +845,7 @@ export default function App() {
               {legend}
             </span>
           </div>
+            <button type="button" className="nine-icon" id="nine-octave" aria-label="Same shape, next octave" {...tipOn("octave")} disabled={!canOctave} onClick={octaveShape} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, minWidth: 32, padding: "0 2px", margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: canOctave ? "pointer" : "default", opacity: canOctave ? 1 : 0.3, fontFamily: SANS, fontSize: 12.5, fontWeight: 600, letterSpacing: "0.01em", color: INK, backgroundColor: PAGE }}>8va</button>
             <button type="button" className="nine-icon" id="nine-play" aria-label={playing ? "Stop" : "Play what is shown"} aria-pressed={playing} {...tipOn("play")} onClick={playShown} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
                 {playing ? <rect x={4.5} y={4.5} width={9} height={9} rx={1.5} strokeWidth={1.4} style={{ fill: INK, stroke: INK }} /> : <path d="M5 3.2 L14.4 9 L5 14.8 Z" strokeWidth={1.4} strokeLinejoin="round" style={{ fill: PAGE, stroke: INK }} />}

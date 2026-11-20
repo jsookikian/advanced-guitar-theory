@@ -44,7 +44,7 @@ C dominant pentatonic: **C D E G Bb** (1 9 3 5 b7). Remove C and you get E G Bb 
 
 The table is `CAGED` in `lesson.tsx` and does not depend on the key: checked for every shape copy in all 12 keys and all three frames (321 cases, none ambiguous). The Explore card states it for the current shape ("Shape 5: the C shape from C, the E shape from E (Eø), the G shape from G (Gm6)"), the Shape buttons carry it in their tooltips and screen-reader labels, and the share image names the shape by the current Count-from frame. This replaced the earlier per-shape chord names ("C9 / Eø", "Gm6"...), which an audit found were not supported by each shape's lowest notes.
 
-**Whole neck.** `instances(key)` lists every copy of the five shapes that fits on frets 0–24, sorted from the nut upward. That gives 9 per key, except D, which has 8. The arrows (and swipe, on cards other than Explore) step through this list and wrap at both ends.
+**Whole neck.** `instances(key)` lists every copy of the five shapes that fits on frets 0–24, sorted from the nut upward. That gives 9 per key, except D, which has 8. The arrows (and swipe, on cards other than Explore) step through this list and stop at the nut and at the top; they grey out there. The long moves are the Shape buttons and the octave step below.
 
 **Drop 2 / Drop 3.**
 - **Drop 2:** a close-position E G Bb D chord with the second note from the top dropped an octave. The fingering per shape is in `DROP2`.
@@ -79,7 +79,7 @@ CHROME=/path/to/chrome node labels2.js
 | Script | What it checks |
 |---|---|
 | `labels2.js` | Every card × layer × shape 1–5 × Intervals/Notes × Count from (360 cases, about 4,900 dots). Checks each label against the theory, the red R only on the root, the legend, the chord names and the page-wide frame. Last run: 0 failures. |
-| `wrap.js` | All 12 keys. Walks every shape copy, checks order, frets 0–24, no missing copies, dots inside the board window, both wrap directions, and the wrap fade (board remount). Last run: 0 failures. Set `KEYS=C,F#` to limit keys. |
+| `wrap.js` | All 12 keys. Walks every shape copy, checks order, frets 0–24, no missing copies, dots inside the board window, that the arrows disable at the nut and at the top (no wrap), and that both the 8va button and tapping the selected Shape step the same shape up 12 frets and back to the lowest, with a remount. Last run: 0 failures. Set `KEYS=C,F#` to limit keys. |
 | `shots2.js` | Board top position per card at 320, 390 and 1280 (no layout shift), card text overflow, sideways scroll, and the settings panel. Writes the three `lesson_390_*` renders. |
 | `fit.js` | Step labels fit at 320, 360 and 390 with 32px tap targets, and the Shape 1–5 buttons fit. |
 | `full.js` | The Explore card at 320 and 390: the neck is scrollable, the shape is centred on load and after every arrow step and Shape button, the board height matches the other cards, Fit all shows the band and keeps the height. Writes `scroll390.png`, `scroll320.png` and `full390.png` to the current directory. |
@@ -112,7 +112,8 @@ CHROME=/path/to/chrome node labels2.js
 - An SVG of a 7-fret window. The neck group slides with a CSS transform (560 ms).
 - All 150 or so possible scale dots are drawn once and fade or scale in and out, so moving between layers and shapes is animated.
 - Fret numbers sit about 12px below the low-E dots.
-- The ‹ › arrows and swipe step through the shape list. Wrapping remounts the board with a 300 ms fade instead of sliding 20 frets.
+- The ‹ › arrows and swipe step through the shape list and stop at the ends (no wrap-around).
+- **Octave step:** the same shape one octave up, from the highest copy back to the lowest, with a 300 ms fade (the board remounts) because the board jumps. Two ways in: the "8va" button in the legend row, and tapping the Shape button you are already on (its tooltip says so). This is how you get between the open-string copy at the nut and its moveable twin at the 12th fret. Disabled when a shape has only one copy (Shape 4 in D).
 - **Scrolling neck** (the Explore card's default, `scroll` prop): the whole neck, frets 0–24, is drawn at the same dot size as the zoom view inside a native horizontally scrolling box (`#nine-scroll`), so a phone user can swipe along it. When the player scrolls by hand and stops, the shape nearest the middle becomes the current one (the Shape bar, legend and lit dots follow), so the screen never shows an unlit stretch of neck; scrolls the page started itself are ignored. The shape is centred in the box: on mount the placement is instant (so a wrap fades in already centred), and after an arrow or Shape button the box glides to the new shape. The string names are pinned over the left edge (right edge when left-handed). The board's width, height and dot size equal the zoom view's, so nothing around it moves. Swipe-to-step is turned off here because a horizontal swipe scrolls instead; the arrows and Shape buttons still step.
 - **Fit all** (Settings → Neck): the `full` prop draws frets 0–24 at once in the zoom view's viewBox (about 12.8 units per fret, dots of radius 6.3 with 7.5px labels, only the marker frets numbered). Only the current shape is lit, on a faint teal band that slides as the shape changes. The choice is kept while you stay on Explore.
 - The other six cards keep the 7-fret window that slides with a CSS transform. Share copies the live SVG, so on Explore it shares the whole neck.

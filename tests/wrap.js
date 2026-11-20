@@ -12,23 +12,36 @@ let fails=0;const F=m=>{fails++;console.log('FAIL',m)};const summary=[];
 for(const key of (process.env.KEYS||'C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B').split(',')){
  const ok=await pg.evaluate(k=>{const s=document.querySelector('select');const o=[...s.options].find(o=>o.value===k);return !!o},key); if(!ok){F('no key '+key);continue;}
  await pg.select('select',key);await S(500);
- // walk to the lowest: press left until the next left wraps (lo jumps up)
- let a=await st(),guard=0;
- while(guard++<20){await pg.click('.nine-arrow[aria-label^="Prev"]');await S(80);const b2=await st();if(b2.lo>a.lo){a=b2;break;}a=b2;}
- // a is now the highest (after wrap). Step right once -> lowest.
- await pg.click('.nine-arrow[aria-label^="Next"]');await S(420);
+ // The arrows stop at the ends: walk down to the lowest copy (Prev disabled there), then up to the highest (Next disabled there).
+ const dis=sel=>pg.evaluate(q=>document.querySelector(q).disabled,sel);
+ for(let g=0;g<20&&!(await dis('.nine-arrow[aria-label^="Prev"]'));g++){await pg.click('.nine-arrow[aria-label^="Prev"]');await S(120);}
+ if(!(await dis('.nine-arrow[aria-label^="Prev"]')))F(key+' Prev never disabled at the nut');
  const list=[];let s=await st();const first=s;
- for(let i=0;i<20;i++){list.push(s);await pg.click('.nine-arrow[aria-label^="Next"]');await S(420);const n=await st();
-  if(n.lo<s.lo){ // wrapped
-    if(n.lo!==first.lo||n.p!==first.p)F(key+' wrap target '+n.txt);
-    if(n.sid===s.sid)F(key+' wrap no remount');
-    break;}
+ for(let i=0;i<20;i++){list.push(s);if(await dis('.nine-arrow[aria-label^="Next"]'))break;await pg.click('.nine-arrow[aria-label^="Next"]');await S(160);const n=await st();
+  if(n.lo<s.lo)F(key+' stepped backwards '+n.txt);
   if(n.sid!==s.sid)F(key+' remount on normal step');
   s=n;}
- // left from lowest wraps to highest
- await pg.click('.nine-arrow[aria-label^="Prev"]');await S(420);const h=await st();const last=list[list.length-1];
- if(h.lo!==last.lo||h.p!==last.p)F(key+' left-wrap '+h.txt+' vs '+last.txt);
- await pg.click('.nine-arrow[aria-label^="Next"]');await S(420);
+ if(!(await dis('.nine-arrow[aria-label^="Next"]')))F(key+' Next never disabled at the top');
+ // Octave: tapping the selected Shape button and the 8va button both move the same shape up 12 frets, and from the highest copy back to the lowest, with a remount.
+ for(const how of ['8va','tap']){
+  for(let sh=1;sh<=5;sh++){
+   const L=list.filter(q=>q.p===sh);if(L.length<2)continue;
+   await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);await S(200);
+   let c=await st();
+   // go to this shape's lowest copy first
+   for(let g=0;g<4&&c.lo!==L[0].lo;g++){await pg.evaluate(()=>document.getElementById('nine-octave').click());await S(120);c=await st();}
+   for(let i=1;i<=L.length;i++){
+    const before=c;
+    if(how==='8va')await pg.evaluate(()=>document.getElementById('nine-octave').click());
+    else await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);
+    await S(160);c=await st();
+    const want=L[i%L.length];
+    if(c.p!==sh||c.lo!==want.lo)F(key+' '+how+' shape '+sh+' step '+i+' went to '+c.txt+' wanted '+want.lo);
+    if(c.sid===before.sid)F(key+' '+how+' no remount');
+   }
+  }
+ }
+ await pg.evaluate(()=>[...document.querySelectorAll('[aria-label="Shape"] button')][0].click());await S(200);
  // checks
  const pc={C:0,Db:1,D:2,Eb:3,E:4,F:5,Gb:6,'F#':6,G:7,Ab:8,A:9,Bb:10,B:11}[key];
  list.forEach((q,i)=>{ if(q.lo<0||q.hi>24)F(key+' range '+q.txt); if(i&&q.lo<list[i-1].lo)F(key+' order');
