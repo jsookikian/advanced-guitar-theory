@@ -1,7 +1,7 @@
 # What this repo wants from the Forma workspace it links into (forma link).
 space:
   title: Advanced Guitar Theory
-  kind: managed          # static files served flat by path: index.html + app.js at the root
+  kind: managed          # static files served flat by path: the catalog at the root, lessons under lessons/<id>/
   source: files          # forma redeploy uploads this directory (org policy allows only sqsp GitHub repos)
 icon: music
 database: none           # a client-side lesson: no tables, no functions

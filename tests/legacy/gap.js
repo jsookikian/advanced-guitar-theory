@@ -2,7 +2,7 @@ const p=require('puppeteer-core');const fs=require('fs');(async()=>{const b=awai
 const S=t=>new Promise(r=>setTimeout(r,t));
 for(const W of [320,390]){const pg=await b.newPage();const cdp=await pg.target().createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:require('path').resolve(__dirname,'dl')});
 await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);await pg.setViewport({width:W,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
-await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../index.html')).href);await S(900);
+await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../lessons/dominant-pentatonics/index.html')).href);await S(900);
 const tops=[],ovf=[];
 for(let c=0;c<14;c++){ if(c) {await pg.keyboard.press('ArrowRight');} await S(450);
  const r=await pg.evaluate(()=>{const d=document.documentElement;const bd=document.getElementById('nine-board');

@@ -1,0 +1,104 @@
+# Project context: what we did and why
+
+Owner: Jordan. First built by Grok Bot on canvas `ca685305-4ea9-4daa-9f3e-16974001e252` (20 Nov 2026); since then this repository is the home of the lesson and Forma hosts it (see the root `README.md`).
+The starting point was Jordan's sheet "How to use Half Diminished / Minor 6 arpeggios to play over dominant chords" (*The 9 approach*). See `source-material/`.
+
+## Feedback history, oldest first
+
+Each item is a request from Jordan, then what was done.
+
+1. **Restyle the sheet as an interactive fretboard.** Done with the white paper look (`#fdfcfb` paper, `#4d3533` ink, teal and red), serif and sans type, fades, and the neck slide. `lockPaint()` was added so forced dark modes can't invert the page.
+2. **Design pass.** Zero layout shift, a 36px control system, a step line, 8px rhythm, checked at 390 and 1280. Done (`renders/history/final_390.png`, `final_1280.png`).
+3. **Turn it into a guided, Duolingo-style lesson.** Done: cards with a progress bar, Back / Continue, settings hidden, and Parts 1–3 (14 steps).
+4. **Remove the ~80px blank gap above short cards.** Done: cards are bottom-aligned and the shape text was tightened.
+5. **Show every root as a red "R" circle (`#b42318`).** Done, with the legend and copy updated.
+6. **Replace the settings gear with a sliders ("adjust") icon and chevron, out of the title area.** Card 2 text set exactly to "The Cs fade out, D fades in. These four notes, E G Bb D, are Eø or Gm6". Done.
+7. **Settings drop-down under the card text, above the board, staying open across steps.** Done as an inline panel. It doesn't close on Esc or a click outside.
+8. **Notes didn't work on every slide.** Fixed: one page-wide Show setting, tested by script. Also fixed in that pass:
+   - Sideways scroll on phones (checked at 320, 360, 390 and 430).
+   - "Drop 2 voicing" renamed to "Drop 2".
+   - Drop 3 slash names, with the line "Drop 3: the top note drops to the low E, so the bass changes, and so does the name."
+9. **Share button for a shareable PNG.** Done: a 1080×1080 paper-white image, using the share sheet where supported, otherwise a download. Samples are in `renders/share-samples/`.
+10. **Count from didn't work on every slide.** Fixed: one page-wide setting, and card 3's buttons set it. Tested.
+11. **Fret numbers too close to the dots.** Fixed: about 12px gap at 390.
+12. **Add ‹ › arrows to move shapes up and down the neck.** Done, plus swipe.
+13. **"The 14 steps don't really make sense; past either end, go all the way to the other end of the fretboard."** Done:
+    - The lesson became **7 cards**: C7, No root, Names, Penta, Mixo, Drop (Drop 2 | Drop 3), and Explore (Explore | Practise | Quiz).
+    - The arrows and swipe work on every card, step through every shape copy from fret 0 to 24, and wrap at both ends with a quick fade.
+    - That makes 9 shape copies per key (8 in D). Tested in all 12 keys.
+14. **"Assess EVERY piece of info and its placement; make it easy to jump between things."** Done:
+    - Audit (table below).
+    - Subtitle cut.
+    - "Step x of N" text merged into tappable progress segments.
+    - Shape name and frets moved next to new Shape 1–5 buttons above the board.
+    - The legend names the Drop chord in Explore.
+15. **"Clickable segments or tabs."** Done: labelled progress segments with 32px tap targets, fitting at 320.
+16. **"Hover over should have a nice label."** Done:
+    - Styled hover labels on the progress segments (e.g. "3 · Same notes, three names").
+    - Arrows show the next or previous shape and frets, and note when they wrap.
+    - Shape buttons, share and settings also have labels.
+    - Kept inside the screen; they show on keyboard focus and on a touch long-press.
+17. **Latest requests: Chord Synonyms, full-neck mode, "Shape N" buttons.** Not done when the zip was exported; done below (items 20-24).
+18. **Export the whole project as a zip with instructions and context.** That zip is the starting point of this repository.
+19. **Make it a lesson-style site, with Dominant Pentatonics as one entry.** Done: a catalog at the root (`index.html`, generated), one folder per lesson (`lessons/<id>/`, source in `src/lessons/<id>/`), `build.mjs`, shared code in `src/shared/`. See the root `README.md` for adding a lesson.
+20. **Finish everything in progress; remove the shape name and frets caption, no new home.** Done. The caption is gone. "Names" became **Chord Synonyms** (the chip reads "Synonyms" under 560px so it fits at 320), "Penta" became **Pentatonic**, "Mixo" became **Mixolydian**, "Practise" became "Practice" (and was then removed, item 23). The shape buttons are a single **Shape 1 to Shape 5** bar, full width, with a small "Shape" caption over the number at 380px and narrower. The title is one line ("Dominant Pentatonics") with an "All lessons" link.
+21. **"That just looks so damn cluttered."** The legend row now holds only the legend, a play button and the settings button; share, the neck mode and the sound choice moved into Settings. The Explore card lost its switch row. Chips, shape bar and layer buttons use heavier outlines (3:1) and fit at 320.
+22. **Explore should show a scrollable neck on mobile with the shape centred.** Done: native horizontal scroll over the whole neck at full dot size, the shape centred on load and after every arrow or Shape button, string names pinned at the left, and the nearest shape becomes current when the player scrolls by hand. The earlier "full neck" view became **Fit all** in Settings → Neck.
+23. **Practice mode is somewhat random: remove Practice and Quiz until there is a plan for how to practise this.** Done: the Explore card is the neck with its layer buttons only. See "Practice" in the open items.
+24. **CAGED names on the shapes.** Jordan's insight: one position is several CAGED shapes at once (Shape 5 is the E shape counting from Eø and the C shape counting from C7). Done as a table by shape and frame root, verified in all 12 keys; the Explore line, the tooltips and the share image use it. It replaced the old per-shape chord names.
+25. **Sound, borrowed from how Oolimo.com does it.** Done: tap a dot to hear it, a play button for the shown notes (arpeggio, or the chord strummed), each note pulsing as it sounds, and the play button turning into a stop button while it plays. The first version was synthesised and "didn't sound good", so it now plays recorded guitar samples (FluidR3 GM, CC BY 3.0, nylon by default, steel and jazz electric behind a Sound setting that will be built out). A bass note under the notes was tried and removed ("weird").
+26. **UI / QA, music-theory and guitarist reviews by Opus agents.** Findings applied: a scrolling bug that showed empty frets, a share image that was a thin strip of the whole neck (it now shares the window on screen, without ghost notes, with the full title and the site name), keyboard arrows changing the card while a radio was focused, a poor arrow hit area, chips too narrow to tap, outline contrast, no link back to the catalog, desktop share opening an OS sheet instead of downloading, missing favicon, "C9/E" style names for a rootless C9 (now "C9 no root"), the Mixolydian 4 presented as a passing note (now the avoid note, and "4 and 13" everywhere), "b2" next to "9" (now b9), and an unused function. The audit found no wrong pitches, spellings, intervals, box shapes, Drop voicings or slash names in any key.
+
+
+## Current state
+
+- **Site:** a catalog at the root, one lesson so far. Hosted on Forma by files upload (`forma redeploy`), not bound to the GitHub repository (our organization allows only `sqsp` repositories as a deploy source).
+- **Cards:** 7, with tappable labelled progress chips: C7 · No root · Synonyms · Pentatonic · Mixolydian · Drop · Explore.
+- **Controls:** a legend row (legend, play/stop, settings) above a Shape 1-5 bar and the board. Explore adds five layer buttons (Arpeggio, Pentatonic, Mixolydian, Drop 2, Drop 3) on the card.
+- **Settings:** Show, Count from, Key, Left-handed, Sound, Neck (Scroll / Fit all), Share image.
+- **Tests (all pass):** `labels2.js` (360 cases, 0 failures), `wrap.js` (all 12 keys, 0 failures), `fit.js` (chips and shape bar fit at 320, 360, 390), `shots2.js` (no layout shift between cards 1-6, no overflow), `full.js` (the Explore neck is scrollable, centred after every arrow and Shape button, both neck modes keep the board height).
+
+
+## Audit (from step 14)
+
+| Element | Verdict | Why |
+|---|---|---|
+| Title | Keep | Names the lesson; also used on the share image |
+| Subtitle | Cut | Repeated the title and cards; saved about 20px |
+| "Step x of N" text and plain bar | Merge | Became the tappable labelled segments |
+| Shape name and frets | Move | Beside the shape buttons, above the board |
+| Card headline and text | Keep | About the idea; shape detail stays short |
+| Card 3 chord buttons vs Count from | Keep both | Same page-wide setting on purpose |
+| Layer toggle | Moved to Explore and Quiz | Cards 1–6 each fix their layer |
+| "Up the neck" cards, Part names, shape toggles on Practise and Quiz | Cut | Replaced by the arrows, shape buttons and one line per shape |
+| Drop 2 and Drop 3 cards | Merge | One card with a toggle |
+| Practise and Quiz cards | Merge | Part of the Explore switch |
+| Legend | Keep | Names the Drop chord in Explore |
+| Share and settings | Keep | Have hover labels |
+| Arrows and swipe | Keep, extended | Whole neck with wraparound |
+| Back / Continue | Keep | Simple linear path |
+
+
+## Open items
+
+| Item | Status |
+|---|---|
+| **Practice** | Removed until there is a plan. The guitarist review ranked three designs: (A) play over the changes: a looping backing track on a ii-V-I in F and then a 12-bar blues, the board switching to each chord's arpeggio with a target note to land on (Bb to A, E to F); build it in two steps starting with a one-chord loop; (B) a drone with a new prompt every two bars; (C) find it in 12 keys on the cycle of fourths. Recommendation: A. Needs a backing track, which needs a decision about sound design (the bass note was rejected). |
+| **A "Use it" card** | Proposed, not built: when this works (a dominant going to a major chord, vamps, blues) and when it doesn't (7b9 going to a minor chord); in F, Gm6 across Gm7 and C7 and the resolutions Bb to A, E to F. Content for Jordan to approve. |
+| **Card 2 wording** | The line "The Cs fade out, D fades in. These four notes, E G Bb D, are Eø or Gm6" is Jordan's exact wording. The guitarist review would add what to do: "play an Eø or Gm6 arpeggio over C7". Needs Jordan's OK. |
+| **Explore copy** | Now the CAGED line. The review suggests a playing tip per shape (where to start, which note to land on). Not written. |
+| **Card 3 auto-cycle** | The names cycle every 2.4 s until a name is tapped; the review asks to stop it. Not decided. |
+| **Settings as a sheet** | The review suggests a bottom sheet or popover instead of an inline panel that pushes the board down. Not done. |
+| **Shape bar into the board** | The review suggests a one-line caption instead of the bar. Not done: Jordan asked for the Shape 1-5 control. |
+| **Sound setting** | A Sound select exists (nylon, steel, jazz electric); it is a placeholder for a fuller sound section. |
+| **Judgement calls from before** | Back / Continue duplicating the chips; a Key chip beside the shapes; the subtitle; spare space above short cards. Still not decided. |
+
+
+## Known caveats
+
+- **iOS share sheet untested** on a real iPhone or Android. `navigator.share({files})` is used only on touch devices; desktop downloads.
+- **Sound has been checked by script, not by ear:** the samples load and decode, the notes are scheduled and stopped; how the three instruments sound is Jordan's call. iOS plays web audio only with the ringer switch on.
+- **Fonts.** "Aime" and "KMR Melange Grotesk" came from the Grok host. Everywhere else they fall back to Georgia and system sans.
+- **Legacy tests.** The scripts in `tests/legacy/` target the 14-step layout and need new selectors.
+- **Reviews ran against moving builds:** the UI/QA report was written while the Play button and CAGED names were landing, so some of its screenshots are from the build just before.
+- **Explore at the nut:** the 7th fret number is cut off at the right edge when the neck is scrolled all the way to the nut.

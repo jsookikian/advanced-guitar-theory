@@ -1,10 +1,10 @@
 const p=require('puppeteer-core');(async()=>{const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
-await pg.setViewport({width:390,height:844});await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../index.html')).href);await new Promise(r=>setTimeout(r,1000));
+await pg.setViewport({width:390,height:844});await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../lessons/dominant-pentatonics/index.html')).href);await new Promise(r=>setTimeout(r,1000));
 const res=await pg.evaluate(async()=>{
  const S=t=>new Promise(r=>setTimeout(r,t));const OP=[4,9,2,7,11,4];
  const LET=['C','D','E','F','G','A','B'],NAT=[0,2,4,5,7,9,11],ST={0:0,2:1,4:2,5:3,7:4,9:5,10:6};
  const NOTE={0:'C',2:'D',4:'E',5:'F',7:'G',9:'A',10:'Bb'};
- const iv=(d,r)=>{const ls=(ST[d]-ST[r]+7)%7,se=(d-r+12)%12,df=((se-NAT[ls]+18)%12)-6;const pre=df<0?'b'.repeat(-df):'#'.repeat(df);if(ls===1&&df===0)return '9';return pre+(ls+1);};
+ const iv=(d,r)=>{const ls=(ST[d]-ST[r]+7)%7,se=(d-r+12)%12,df=((se-NAT[ls]+18)%12)-6;const pre=df<0?'b'.repeat(-df):'#'.repeat(df);if(ls===1&&df===0)return '9';return pre+(ls===1?9:ls+1);};
  const btns=sel=>[...document.querySelectorAll(sel)];
  const click=(sel,t)=>{const x=btns(sel).find(b=>b.textContent.trim()===t);if(!x)throw new Error('no '+t+' in '+sel);x.click();};
  const goCard=async c=>{btns('nav[aria-label="Lesson steps"] button')[c].click();await S(60);const cur=btns('nav button').findIndex(x=>x.getAttribute('aria-current')==='step');if(cur!==c)throw new Error('nav '+c+' got '+cur);};
@@ -12,14 +12,14 @@ const res=await pg.evaluate(async()=>{
  const FR=[['C9',0],['Eø',4],['Gm6',7]];
  for(let c=0;c<7;c++){
   await goCard(c);
-  const toggles = c===5 ? [[null,'Drop 2'],[null,'Drop 3']] : c===6 ? [...['Arpeggio','Pentatonic','Mixolydian','Drop 2','Drop 3'].flatMap(l=>[['Explore',l],['Quiz',l]]),['Practise',null]] : [[null,null]];
+  const toggles = c===5 ? [[null,'Drop 2'],[null,'Drop 3']] : c===6 ? ['Arpeggio','Pentatonic','Mixolydian','Drop 2','Drop 3'].map(l=>[null,l]) : [[null,null]];
   for(const [em,tg] of toggles){ if(em){click('.nine-card button',em);await S(30);} if(tg) {click('.nine-card button',tg);await S(30);}
-   for(const shp of ['1','2','3','4','5']){ click('[aria-label="Shape"] button',shp); await S(30);
+   for(const shp of ['1','2','3','4','5']){ click('[aria-label="Shape"] button','Shape'+shp); await S(30);
    for(const mode of ['Intervals','Notes']){ click('#nine-settings button',mode); await S(20);
     for(const [fl,fr] of FR){
      if(c===2) click('.nine-card button',fl); else click('#nine-settings button',fl);
      await S(40);
-     const quiz=em==='Quiz';
+     const quiz=false;
      if(quiz){ for(const g of document.querySelectorAll('#nine-board g[data-vis="1"]')) if(!g.querySelector('text').textContent){ g.dispatchEvent(new MouseEvent('click',{bubbles:true})); await S(8);} await S(40);}
      const r = fr; cases++;
      const sp=document.getElementById('nine-shape'); if(sp.dataset.p!==shp) fails.push('shape pick '+shp+' got '+sp.dataset.p);
@@ -34,8 +34,8 @@ const res=await pg.evaluate(async()=>{
      const rootShown=[...document.querySelectorAll('#nine-board g[data-vis="1"]')].some(g=>(OP[+g.dataset.s]+ +g.dataset.f)%12===r);
      legChecks++;
      if(!quiz && rootShown && !leg.includes('R = root ('+NOTE[r]+')')) fails.push(`legend card${c+1} ${em} ${tg} ${mode} ${fl}: ${leg}`);
-     if(c===5){ nameChecks++; const h2=document.querySelector('.nine-card h2').textContent; if(!new RegExp(BASE+'(/[A-G]b?)?$').test(h2)) fails.push(`name card6 ${tg} ${fl}: ${h2}`);}
-     if(c===6&&!quiz&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; if(!new RegExp(tg+' · '+BASE+'(/[A-G]b?)?').test(leg)) fails.push(`legend name ${tg} ${fl}: ${leg}`);}
+     if(c===5){ nameChecks++; const h2=document.querySelector('.nine-card h2').textContent; if(!new RegExp(BASE+'( no root|/[A-G]b?)?$').test(h2)) fails.push(`name card6 ${tg} ${fl}: ${h2}`);}
+     if(c===6&&!quiz&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; if(!new RegExp(tg+' · '+BASE+'( no root|/[A-G]b?)?').test(leg)) fails.push(`legend name ${tg} ${fl}: ${leg}`);}
      const gl=[...document.querySelectorAll('#nine-settings [role=radiogroup]')][1].querySelector('[aria-checked=true]').textContent;
      if(gl!==fl) fails.push(`global frame card${c+1} shows ${gl} want ${fl}`);
     }}}}

@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "grok/canvas";
 import type { CSSProperties, ChangeEvent, ReactNode } from "grok/canvas";
+import { pluck, playPhrase, stopAll, setInstrument, INSTRUMENTS } from "../../shared/audio";
+import type { InstrumentId } from "../../shared/audio";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -12,6 +14,8 @@ const INK = "#4d3533";
 const INK2 = "#806a68";
 const PAGE = "#fdfcfb";
 const LINE = "#dcd5d4";
+// Edges of controls need more contrast than hairlines (3:1 against the paper).
+const LINE_UI = "#b9aeac";
 const TEAL = "#0f766e";
 const RED = "#b42318";
 const SERIF = "Aime, Georgia, serif";
@@ -73,8 +77,7 @@ function ivName(d: number, r: number): string {
   const semis = (d - r + 12) % 12;
   const diff = ((semis - NATURAL[ls] + 18) % 12) - 6;
   const pre = diff < 0 ? "b".repeat(-diff) : "#".repeat(diff);
-  if (ls === 1 && diff === 0) return "9";
-  return pre + String(ls + 1);
+  return pre + String(ls === 1 ? 9 : ls + 1);
 }
 function degOf(s: number, f: number, k: KeyDef): number {
   return (OPEN_PC[s] + f - k.pc + 24) % 12;
@@ -87,21 +90,6 @@ function boxSpan(p: number): [number, number] {
   let hi = 0;
   BOX[p].forEach((fs: number[]) => fs.forEach((f: number) => { lo = Math.min(lo, f); hi = Math.max(hi, f); }));
   return [lo, hi];
-}
-// The climb: five shapes in neck order, then the first shape again an octave up (verified for all 12 keys, top fret 22).
-function sequence(off: number): { p: number; sh: number }[] {
-  let best: { order: { p: number; sh: number }[]; top: number } | null = null;
-  for (let p = 0; p < 5; p++) {
-    const [lo] = boxSpan(p);
-    const sh = lo + off - 12 >= 0 ? off - 12 : off;
-    const ids = [...Array.from({ length: 5 - p }, (_: unknown, i: number) => p + i), ...Array.from({ length: p }, (_: unknown, i: number) => i)];
-    const order = ids.map((q: number) => ({ p: q, sh: q >= p ? sh : sh + 12 }));
-    order.push({ p, sh: sh + 12 });
-    const top = Math.max(...order.map((o: { p: number; sh: number }) => boxSpan(o.p)[1] + o.sh));
-    if (p === 0 && top <= 22) return order;
-    if (best === null || top < best.top) best = { order, top };
-  }
-  return best ? best.order : [];
 }
 function buildPos(p: number, sh: number, octave: boolean, k: KeyDef): Pos {
   const [l0, h0] = boxSpan(p);
@@ -120,12 +108,14 @@ function buildPos(p: number, sh: number, octave: boolean, k: KeyDef): Pos {
   const drop3 = new Set<string>(DROP2[p].map((sf: number[]) => `${sf[0] === 5 ? 0 : sf[0]}-${sf[1] + sh}`));
   return { p, sh, octave, dots, lo, hi, drop, drop3 };
 }
-function shapeName(p: number, k: KeyDef): string {
-  const I = spell(k, 0);
-  const III = spell(k, 4);
-  const V = spell(k, 7);
-  return [`${I}9 / ${III}ø`, `${V}m6`, `${I}9`, `${V}m6/${spell(k, 2)}`, `${III}ø`][p];
-}
+// One position, three CAGED shapes. Which CAGED form a pentatonic box is depends on the root you count from: the box's root
+// notes sit on the strings of one of the five forms. The table is by shape (1-5) and frame root (the key's 1, 3 or 5) and does not
+// depend on the key (checked for all 12 keys: the strings carrying the frame root inside each box always match exactly one form).
+const CAGED: Record<number, string[]> = {
+  0: ["A", "G", "E", "D", "C"],
+  4: ["D", "C", "A", "G", "E"],
+  7: ["E", "D", "C", "A", "G"],
+};
 
 // Re-assert every inline paint colour as !important, give unpainted HTML elements inherit/transparent,
 // and cancel an inverting filter on any host ancestor, so no host or theme rule can repaint the sheet.
@@ -181,32 +171,54 @@ interface BoardProps {
   ringDeg: number;
   lefty: boolean;
   drop2: Set<string>;
-  interactive: boolean;
-  onHover: (key: string) => void;
-  onTap: (key: string) => void;
-  path?: Dot[];
-  pathRun: number;
+  // Full neck: frets 0-24 at once in the same viewBox, smaller dots, the current shape on a faint band.
+  full?: boolean;
+  band?: [number, number];
+  // Scroll: the whole neck (frets 0-24) at the zoom view's dot size inside a horizontally scrolling box,
+  // re-centred on `center` (the shape's middle fret) whenever the shape changes.
+  scroll?: boolean;
+  center?: number;
+  // Tap a lit dot to hear it.
+  onPlay?: (s: number, f: number) => void;
+  // Scroll mode: called with the fret at the centre of the box once the player stops scrolling by hand.
+  onSettle?: (fret: number) => void;
 }
 
+// The zoom view's viewBox width: string labels (26) + 7 frets (322) + margin (8). Scroll mode keeps this scale.
+const ZOOM_W = 356;
+
+const FULL_MARKS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
+
 function Board(props: BoardProps) {
-  const { k, shown, wl, step, labelOf, ringDeg, lefty, drop2, interactive, onHover, onTap, path, pathRun } = props;
-  const cw = 46;
+  const { k, shown, wl, step, labelOf, ringDeg, lefty, drop2, full, band, scroll, center, onPlay, onSettle } = props;
+  const scRef = useRef<HTMLDivElement>(null);
+  const firstRef = useRef<boolean>(true);
+  const progAt = useRef<number>(0);
   const sg = 28;
-  const r = 11.5;
-  const openW = 32;
   const lab = 26;
   const top = 20;
-  const VW = 7 * cw;
+  // Zoom shows a 7-fret window; the full neck fits all 24 frets plus the open-string column in that same 322-unit width,
+  // so the board's width and height (and the layout around it) never change.
+  const VW7 = 7 * 46;
+  const openW = full ? 14 : 32;
+  const cw = full ? (VW7 - openW) / MAXF : 46;
+  const r = full ? 6.3 : 11.5;
+  // Scroll mode draws the whole neck at zoom size; the scroll box (below) shows a ZOOM_W-wide slice of it.
+  const VW = scroll ? openW + MAXF * cw : VW7;
   const W = lab + VW + 8;
   // Room below the low E: dot edge (r 11.5) + ~12px gap + fret-number row.
   const H = top + 5 * sg + 38;
   const gx = (f: number): number => { const x = f === 0 ? -openW / 2 : (f - 0.5) * cw; return lefty ? -x : x; };
   const lx = (x: number): number => (lefty ? -x : x);
   const Y = (s: number): number => top + (5 - s) * sg;
-  const vs = wl === 0 ? -openW : (wl - 1) * cw;
+  const vs = full || scroll || wl === 0 ? -openW : (wl - 1) * cw;
   const left = lefty ? 8 : lab;
   const tx = lefty ? left + vs + VW : left - vs;
-  const fs = 11.5;
+  const fs = full ? 7.5 : 11.5;
+  const bandA = band ? gx(band[0]) - (lefty ? -cw / 2 : cw / 2) : 0;
+  const bandB = band ? gx(band[1]) + (lefty ? -cw / 2 : cw / 2) : 0;
+  const bandX = Math.min(bandA, bandB);
+  const bandW = Math.abs(bandB - bandA);
 
   const rank = new Map<string, number>();
   [...shown].sort((a: Dot, b: Dot) => pitch(a) - pitch(b)).forEach((d: Dot, i: number) => rank.set(`${d.s}-${d.f}`, i));
@@ -215,30 +227,57 @@ function Board(props: BoardProps) {
   const frets = Array.from({ length: MAXF }, (_: unknown, i: number) => i + 1);
   const midY = (Y(2) + Y(3)) / 2;
   const tr = (ms: number): string => `opacity ${ms}ms ease, fill ${ms}ms ease, stroke ${ms}ms ease`;
-  const pathPts = (path ?? []).map((d: Dot) => `${gx(d.f)},${Y(d.s)}`).join(" ");
 
-  return (
-    <svg id="nine-board" viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: "100%", height: "auto", fontFamily: SANS, overflow: "hidden", backgroundColor: PAGE, animation: "nine-in 300ms ease both" }} role="img" aria-label={`Fretboard from fret ${wl}`}>
+  // Scroll mode: centre the shape in the scroll box. The first placement (mount, including a wrap) is instant; later ones glide.
+  useEffect(() => {
+    const el = scRef.current;
+    if (!scroll || !el || center === undefined) return;
+    const unit = el.clientWidth / ZOOM_W;
+    const target = (tx + gx(center)) * unit - el.clientWidth / 2;
+    progAt.current = performance.now();
+    el.scrollTo({ left: Math.max(0, target), behavior: firstRef.current ? "auto" : "smooth" });
+    firstRef.current = false;
+  }, [scroll, center, lefty, k.id]);
+
+  // When the player scrolls by hand and stops, the shape nearest the middle becomes the current one, so the Shape bar,
+  // the legend and the lit dots always describe what is on screen. Scrolls we started ourselves are ignored.
+  useEffect(() => {
+    const el = scRef.current;
+    if (!scroll || !el || !onSettle) return;
+    let t = 0;
+    const onScroll = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        if (performance.now() - progAt.current < 1000) return;
+        const unit = el.clientWidth / ZOOM_W;
+        const x = (el.scrollLeft + el.clientWidth / 2) / unit - tx;
+        onSettle(lefty ? -x / cw + 0.5 : x / cw + 0.5);
+      }, 140);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => { el.removeEventListener("scroll", onScroll); window.clearTimeout(t); };
+  });
+
+  const board = (
+    <svg id="nine-board" viewBox={`0 0 ${W} ${H}`} width={scroll ? `${(W / ZOOM_W) * 100}%` : "100%"} style={{ display: "block", maxWidth: scroll ? "none" : "100%", height: "auto", fontFamily: SANS, overflow: "hidden", backgroundColor: PAGE, animation: "nine-in 300ms ease both" }} role="img" aria-label={`Fretboard from fret ${wl}`}>
       <defs><clipPath id="nine-clip"><rect x={left - 2} y={0} width={VW + 4} height={H} /></clipPath></defs>
       {[0, 1, 2, 3, 4, 5].map((s: number) => (
         <text key={`sn${s}`} x={lefty ? left + VW + 8 : lab - 8} y={Y(s) + 4} textAnchor={lefty ? "start" : "end"} fontSize={11} style={{ fill: INK2 }}>{STR_NAMES[s]}</text>
       ))}
       <g clipPath="url(#nine-clip)">
         <g style={{ transform: `translate(${tx}px, 0px)`, transition: `transform 560ms ${EASE}` }}>
-          {[3, 5, 7, 9, 15, 17, 19, 21].map((f: number) => <circle key={`i${f}`} cx={gx(f)} cy={midY} r={5} style={{ fill: INK2 }} opacity={0.22} />)}
+          {band ? <rect data-band="1" x={bandX} y={Y(5) - 16} width={bandW} height={5 * sg + 32} rx={6} style={{ fill: TEAL, opacity: 0.1, transition: `x 560ms ${EASE}, width 560ms ${EASE}` }} /> : null}
+          {[3, 5, 7, 9, 15, 17, 19, 21].map((f: number) => <circle key={`i${f}`} cx={gx(f)} cy={midY} r={full ? 3 : 5} style={{ fill: INK2 }} opacity={0.22} />)}
           {[12, 24].map((f: number) => (
             <g key={`ii${f}`}>
-              <circle cx={gx(f)} cy={(Y(3) + Y(4)) / 2} r={5} style={{ fill: INK2 }} opacity={0.22} />
-              <circle cx={gx(f)} cy={(Y(1) + Y(2)) / 2} r={5} style={{ fill: INK2 }} opacity={0.22} />
+              <circle cx={gx(f)} cy={(Y(3) + Y(4)) / 2} r={full ? 3 : 5} style={{ fill: INK2 }} opacity={0.22} />
+              <circle cx={gx(f)} cy={(Y(1) + Y(2)) / 2} r={full ? 3 : 5} style={{ fill: INK2 }} opacity={0.22} />
             </g>
           ))}
           {frets.map((f: number) => <line key={`f${f}`} x1={lx(f * cw)} x2={lx(f * cw)} y1={Y(5)} y2={Y(0)} style={{ stroke: INK2 }} strokeWidth={1.2} opacity={0.55} />)}
           {[0, 1, 2, 3, 4, 5].map((s: number) => <line key={`s${s}`} x1={lx(-openW)} x2={lx(MAXF * cw)} y1={Y(s)} y2={Y(s)} style={{ stroke: INK }} strokeWidth={1} opacity={0.5} />)}
           <line x1={0} x2={0} y1={Y(5) - 0.5} y2={Y(0) + 0.5} style={{ stroke: INK }} strokeWidth={5} />
-          {frets.map((f: number) => <text key={`n${f}`} x={gx(f)} y={Y(0) + 32} textAnchor="middle" fontSize={11} style={{ fill: INK2 }}>{f}</text>)}
-          {path && path.length > 1 ? (
-            <polyline key={`path${pathRun}`} points={pathPts} pathLength={1} fill="none" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="1 1" style={{ stroke: TEAL, opacity: 0.5, animation: `nine-draw ${path.length * 160}ms linear both` }} />
-          ) : null}
+          {frets.filter((f: number) => !full || FULL_MARKS.includes(f)).map((f: number) => <text key={`n${f}`} x={gx(f)} y={Y(0) + 32} textAnchor="middle" fontSize={full ? 9.5 : 11} style={{ fill: INK2 }}>{f}</text>)}
           {all.map((dot: Dot) => {
             const key = `${dot.s}-${dot.f}`;
             const rk = rank.get(key);
@@ -255,27 +294,44 @@ function Board(props: BoardProps) {
               transformBox: "fill-box",
               transformOrigin: "center",
               transition: `opacity 320ms ease ${delay}ms, transform 380ms cubic-bezier(.2,.8,.3,1.15) ${delay}ms`,
-              pointerEvents: vis && interactive ? "auto" : "none",
-              cursor: interactive ? "pointer" : undefined,
+              pointerEvents: vis && onPlay ? "auto" : "none",
+              cursor: onPlay ? "pointer" : undefined,
             };
             return (
-              <g key={key} data-s={dot.s} data-f={dot.f} data-vis={vis ? 1 : 0} style={gStyle} onMouseEnter={() => onHover(key)} onMouseLeave={() => onHover("")} onClick={() => onTap(key)}>
-                <circle cx={cx} cy={cy} r={r} strokeDasharray={L.dashed ? "3 2.4" : undefined} style={{ fill: L.fill, stroke: L.stroke, strokeWidth: L.sw, opacity: L.dotOp, transition: tr(320) }} />
+              <g key={key} data-s={dot.s} data-f={dot.f} data-vis={vis ? 1 : 0} style={gStyle} onClick={(e: { currentTarget: SVGGElement }) => {
+                if (!onPlay) return;
+                onPlay(dot.s, dot.f);
+                // A short pulse on the tapped dot, as a tap acknowledgement.
+                const c = e.currentTarget.querySelector("circle");
+                if (c && c.animate) c.animate([{ transform: "scale(1)" }, { transform: "scale(1.3)" }, { transform: "scale(1)" }], { duration: 220, easing: "ease-out" });
+              }}>
+                <circle cx={cx} cy={cy} r={r} strokeDasharray={L.dashed ? "3 2.4" : undefined} style={{ fill: L.fill, stroke: L.stroke, strokeWidth: L.sw, opacity: L.dotOp, transition: tr(320), transformBox: "fill-box", transformOrigin: "center" }} />
                 <text key={label} x={cx} y={cy + size * 0.36} textAnchor="middle" fontSize={size} fontWeight={600} style={{ fill: L.text, opacity: label ? L.textOp : 0, transition: tr(240), animation: "nine-lbl 280ms ease both" }}>{label}</text>
               </g>
             );
           })}
-          {(path ?? []).map((d: Dot, i: number) => (
-            <text key={`o${pathRun}-${i}`} x={gx(d.f) + (lefty ? -15 : 15)} y={Y(d.s) - 11} textAnchor="middle" fontSize={9.5} fontWeight={600} style={{ fill: TEAL, animation: `nine-in 260ms ease ${i * 160}ms both` }}>{i + 1}</text>
-          ))}
         </g>
       </g>
     </svg>
   );
+  if (!scroll) return board;
+  // Scrolling neck: native horizontal scroll over the wide board, with the string names pinned over the left edge.
+  const pinLeft = !lefty;
+  return (
+    <div style={{ position: "relative", backgroundColor: PAGE }}>
+      <div ref={scRef} id="nine-scroll" style={{ overflowX: "auto", overflowY: "hidden", overscrollBehaviorX: "contain", scrollbarWidth: "none", backgroundColor: PAGE }}>{board}</div>
+      <svg aria-hidden="true" viewBox={`0 0 ${lab} ${H}`} style={{ position: "absolute", top: 0, [pinLeft ? "left" : "right"]: 0, width: `${(lab / ZOOM_W) * 100}%`, height: "auto", pointerEvents: "none", backgroundColor: PAGE }}>
+        <rect x={0} y={0} width={lab} height={H} style={{ fill: PAGE }} />
+        {[0, 1, 2, 3, 4, 5].map((s: number) => (
+          <text key={`pn${s}`} x={pinLeft ? lab - 8 : 8} y={Y(s) + 4} textAnchor={pinLeft ? "end" : "start"} fontSize={11} style={{ fill: INK2 }}>{STR_NAMES[s]}</text>
+        ))}
+      </svg>
+    </div>
+  );
 }
 
 // Segmented control: equal segments with a filled indicator that slides to the selected one.
-function Seg(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; disabled?: boolean; weights?: number[] }) {
+function Seg(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; disabled?: boolean; weights?: number[]; className?: string }) {
   const { options, value, onChange, disabled } = props;
   const n = options.length;
   const i = Math.max(0, options.findIndex((o: { value: string; label: string }) => o.value === value));
@@ -284,7 +340,7 @@ function Seg(props: { options: { value: string; label: string }[]; value: string
   const sum = w.reduce((a: number, b: number) => a + b, 0);
   const before = w.slice(0, i).reduce((a: number, b: number) => a + b, 0);
   return (
-    <div role="radiogroup" className="nine-seg" style={{ position: "relative", display: "grid", gridTemplateColumns: w.map((x: number) => `minmax(0, ${x}fr)`).join(" "), height: CH, border: BORDER, borderRadius: RAD, overflow: "hidden", backgroundColor: PAGE, color: INK, boxSizing: "border-box", width: "100%" }}>
+    <div role="radiogroup" className={`nine-seg${props.className ? ` ${props.className}` : ""}`} style={{ position: "relative", display: "grid", gridTemplateColumns: w.map((x: number) => `minmax(0, ${x}fr)`).join(" "), height: CH, border: BORDER, borderRadius: RAD, overflow: "hidden", backgroundColor: PAGE, color: INK, boxSizing: "border-box", width: "100%" }}>
       <span aria-hidden="true" style={{ position: "absolute", top: 0, bottom: 0, left: `${(before * 100) / sum}%`, width: `${(w[i] * 100) / sum}%`, backgroundColor: INK, transition: `left 200ms ${EASE}, width 200ms ${EASE}` }} />
       {options.map((o: { value: string; label: string }, j: number) => {
         const on = j === i;
@@ -381,7 +437,9 @@ function instances(k: KeyDef): Pos[] {
   return out.sort((a: Pos, b: Pos) => a.lo - b.lo || a.p - b.p);
 }
 // Short labels for the step chips (the progress row doubles as navigation: any card is one tap away).
-const STEP_LABEL = ["C7", "No root", "Names", "Penta", "Mixo", "Drop", "Explore"];
+// Third chip: "Synonyms" on a phone, "Chord Synonyms" once there is room (CSS swaps the two spans).
+const STEP_LABEL = ["C7", "No root", "Synonyms", "Pentatonic", "Mixolydian", "Drop", "Explore"];
+const STEP_LONG: Record<number, string> = { 2: "Chord Synonyms" };
 function homeIndex(list: Pos[]): number {
   const i = list.findIndex((q: Pos) => q.p === 0 && q.lo >= 1);
   return i >= 0 ? i : 0;
@@ -400,8 +458,10 @@ export default function App() {
   const [layerMode, setLayerMode] = useState<string>("penta");
   const [inst, setInst] = useState<number>(-1);
   const [jump, setJump] = useState<number>(0);
-  const [exMode, setExMode] = useState<string>("explore");
   const [vKind, setVKind] = useState<string>("grip");
+  const [full, setFull] = useState<boolean>(false);
+  const [sound, setSound] = useState<InstrumentId>("nylon");
+  const [playing, setPlaying] = useState<boolean>(false);
   const [tip, setTip] = useState<{ id: string; cx: number; top: number; bottom: number } | null>(null);
   const pressRef = useRef<{ t: number; shown: boolean }>({ t: 0, shown: false });
   useEffect(() => {
@@ -411,16 +471,12 @@ export default function App() {
     return () => { window.removeEventListener("scroll", h, true); window.removeEventListener("resize", h); };
   }, []);
   const touchRef = useRef<{ x: number; y: number } | null>(null);
-  const [reveal, setReveal] = useState<Set<string>>(new Set<string>());
-  const [hover, setHover] = useState<string>("");
-  const [pathRun, setPathRun] = useState<number>(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const total = CARDS.length;
   const go = (i: number) => {
     const t = Math.max(0, Math.min(total - 1, i));
     setCard((c: number) => { setDir(t >= c ? 1 : -1); return t; });
-    setReveal(new Set<string>()); setHover(""); setPathRun(0);
     if (t === 2) { setCyc(Number(frameRef.current)); setCycTouched(false); }
   };
   const cardRef = useRef<number>(0);
@@ -431,7 +487,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "SELECT" || t.tagName === "INPUT")) return;
+      if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.getAttribute("role") === "radio" || t.getAttribute("role") === "checkbox")) return;
       if (e.key === "ArrowRight") go(cardRef.current + 1);
       if (e.key === "ArrowLeft") go(cardRef.current - 1);
     };
@@ -459,7 +515,6 @@ export default function App() {
     const t = (raw + seq.length) % seq.length;
     if (raw !== t) setJump((j: number) => j + 1);
     setInst(t);
-    setReveal(new Set<string>()); setHover(""); setPathRun(0);
   };
   // Direct shape pick: the same shape number nearest the current position, so the board barely moves.
   const pickShape = (p: number): void => {
@@ -467,11 +522,13 @@ export default function App() {
     seq.forEach((q: Pos, i: number) => { if (q.p === p && (best < 0 || Math.abs(q.lo - seq[shapeIdx].lo) < Math.abs(seq[best].lo - seq[shapeIdx].lo))) best = i; });
     if (best < 0 || best === shapeIdx) return;
     setInst(best);
-    setReveal(new Set<string>()); setHover(""); setPathRun(0);
   };
   const cur = seq[shapeIdx];
-  const mode: Mode = C.kind === "voicing" ? (vKind as Mode) : C.kind === "explore" ? (exMode === "practise" ? "arp" : (layerMode as Mode)) : (C.mode as Mode);
-  const quiz = C.kind === "explore" && exMode === "quiz";
+  const mode: Mode = C.kind === "voicing" ? (vKind as Mode) : C.kind === "explore" ? (layerMode as Mode) : (C.mode as Mode);
+  // Explore shows a scrolling neck (full-size dots, shape centred) or, when asked, the whole neck fitted to the screen.
+  const onExplore = C.kind === "explore";
+  const fullOn = full && onExplore;
+  const scrollOn = onExplore && !full;
   // One global label mode: every dot on every card follows Show (Intervals / Notes).
   const intervals = show === "intervals";
   // One global Count-from frame for every card; card 3 shows its own demo cycle, which starts from (and when tapped, sets) the global frame.
@@ -486,15 +543,40 @@ export default function App() {
   const ivs = (ds: number[]): string => ds.map(iv).join(" ");
 
   const shown = modeDots(cur.dots, mode);
+  // Sound: tap a lit dot to hear it; the play button plays what is on the board, notes ascending or the chord strummed.
+  const playDot = (s: number, f: number): void => { void pluck(OPEN_MIDI[s] + f, 0.8); };
+  // After a hand scroll on the Explore neck, the shape nearest the middle becomes current (with a little bias towards staying put).
+  const settleScroll = (fret: number): void => {
+    const mid = (q: Pos): number => (q.lo + q.hi) / 2;
+    let best = shapeIdx;
+    let bd = Math.abs(mid(seq[shapeIdx]) - fret) - 0.5;
+    seq.forEach((q: Pos, i: number) => { const d = Math.abs(mid(q) - fret); if (d < bd) { bd = d; best = i; } });
+    if (best !== shapeIdx) setInst(best);
+  };
+  // Emphasise every lit dot that sounds this pitch (used while a phrase plays; a tap pulses its own dot).
+  const pulseMidi = (m: number): void => {
+    document.querySelectorAll('#nine-board g[data-vis="1"]').forEach((g: Element) => {
+      if (OPEN_MIDI[Number(g.getAttribute("data-s"))] + Number(g.getAttribute("data-f")) !== m) return;
+      const c = g.querySelector("circle");
+      if (c && c.animate) c.animate([{ transform: "scale(1)" }, { transform: "scale(1.45)" }, { transform: "scale(1)" }], { duration: 300, easing: "ease-out" });
+    });
+  };
+  // The play button turns into a stop button while a phrase is sounding.
+  const playShown = (): void => {
+    if (playing) { stopAll(); setPlaying(false); return; }
+    const set = mode === "grip" ? cur.drop : mode === "drop3" ? cur.drop3 : null;
+    const midis = set
+      ? [...set].map((key: string) => { const [s, f] = key.split("-").map(Number); return OPEN_MIDI[s] + f; })
+      : shown.map((d: Dot) => OPEN_MIDI[d.s] + d.f);
+    setPlaying(true);
+    void playPhrase({ notes: midis, style: set ? "strum" : "arpeggio", onNote: pulseMidi }).then(() => setPlaying(false));
+  };
+  // Anything that changes what is on the board silences a phrase that is still playing.
+  useEffect(() => { stopAll(); setPlaying(false); }, [card, shapeIdx, keyId, layerMode, vKind, frame, show]);
   const labelOf = (d: Dot): string => {
-    const key = `${d.s}-${d.f}`;
-    if (quiz && !reveal.has(key) && hover !== key) return "";
     if (!intervals) return n(d.d);
     return d.d === eff ? "R" : iv(d.d);
   };
-  const sorted = [...cur.dots].filter((d: Dot) => !d.add).sort((a: Dot, b: Dot) => pitch(a) - pitch(b));
-  const low3 = sorted.find((d: Dot) => d.d === 4);
-  const arpPath = low3 ? sorted.filter((d: Dot) => ARP.includes(d.d) && pitch(d) >= pitch(low3)) : [];
   const dropNotes: number[] = DROP2[cur.p].map((sf: number[]) => degOf(sf[0], sf[1] + cur.sh, k));
   // Name a voicing as an inversion of the Count-from chord: slash the actual lowest note unless it is that chord's root.
   const nameFrame = eff;
@@ -502,23 +584,17 @@ export default function App() {
     const ds = [...set].map((key: string) => { const [s, f] = key.split("-").map(Number); return { s, f, d: degOf(s, f, k), add: false }; });
     const bass = ds.reduce((a: Dot, b: Dot) => (pitch(b) < pitch(a) ? b : a));
     const base = nameFrame === 0 ? `${I}9` : nameFrame === 4 ? `${III}\u00f8` : `${V}m6`;
+    if (nameFrame === 0) return `${I}9 no root`;
     return bass.d === nameFrame ? base : `${base}/${n(bass.d)}`;
   };
   const shapeLabel = (q: Pos): string => `Shape ${q.p + 1}`;
-  const quizCount = shown.filter((d: Dot) => reveal.has(`${d.s}-${d.f}`)).length;
 
-  // One short line per shape (by shape number) on how it joins its neighbours, checked against the shape data:
-  // each shape's top note on every string is the next shape's bottom note.
-  const NECK: string[] = [
-    `The home shape, ${I}9 / ${III}ø. Its top notes are where Shape 2 starts.`,
-    `Its bottom notes are Shape 1's top notes. Read from ${V}, it's ${V}m6: ${notes(GM6)}.`,
-    `${I} on both E strings, the 9 (${n(2)}) two frets above: the ${I}9 sound.`,
-    `Both E strings start on the 9, ${n(2)}: lead with the colour note, not the root.`,
-    `Both E strings start on the 3, ${III}, so from its lowest note it reads as ${III}ø.`,
-  ];
-  const layerSeg = () => segBtn([{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7]);
+  // The same position is a different CAGED shape depending on the root you count from.
+  const cg = (deg: number): string => CAGED[deg][cur.p];
+  const cagedLine = `Shape ${cur.p + 1}: the ${cg(0)} shape from ${I}, the ${cg(4)} shape from ${III} (${III}ø), the ${cg(7)} shape from ${V} (${V}m6).`;
+  const layerSeg = () => segBtn([{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7], "nine-layers");
 
-  const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[]) => <Seg options={o} value={v} onChange={on} weights={weights} />;
+  const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Seg options={o} value={v} onChange={on} weights={weights} className={className} />;
   const head = (t: string, extra?: string) => (
     <h2 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.4px", color: INK, backgroundColor: PAGE, margin: 0 }}>
       {t}{extra ? <span style={{ fontFamily: SANS, fontSize: 12.5, color: INK2, backgroundColor: PAGE, letterSpacing: 0, marginLeft: 8 }}>{extra}</span> : null}
@@ -530,33 +606,25 @@ export default function App() {
   if (C.kind === "c7") body = <>{head(`Here's ${I}7.`)}{line(`Just the chord tones, ${notes(CHORD)} (1 3 5 b7 of ${I}7). ${eff === 0 ? `R marks the root, ${I}.` : `Counting from ${n(eff)}, so R marks ${n(eff)}.`}`)}</>;
   else if (C.kind === "lose") body = <>{head("Lose the root, add the 9.")}{line(`The ${I}s fade out, ${n(2)} fades in. These four notes, ${notes(ARP)}, are ${III}ø or ${V}m6`)}</>;
   else if (C.kind === "names") body = (
-    <>{head("Same notes, three names.")}{line(`Over a ${I} bass they spell ${I}9 with no root. Read them from ${III} or ${V} and they're ${III}ø or ${V}m6.`)}
+    <>{head("Chord Synonyms.")}{line(`The same four notes, three names: ${I}9 with no root over ${I}, ${III}ø from ${III}, ${V}m6 from ${V}.`)}
       <div style={{ marginTop: 4 }}>{segBtn([{ value: "0", label: `${I}9` }, { value: "4", label: `${III}ø` }, { value: "7", label: `${V}m6` }], String(cyc), (v: string) => { setCyc(Number(v)); setCycTouched(true); setFrame(v); })}</div></>
   );
   else if (C.kind === "penta") body = <>{head("Put the root back: the dominant pentatonic.")}{line(`${notes(PENTA)} (${ivs(PENTA)}). One shape: a scale to run and a chord to arpeggiate.`)}</>;
-  else if (C.kind === "mixo") body = <>{head(`Fill the gaps: ${I} Mixolydian.`)}{line(`${n(5)} and ${n(9)} fade in dashed. Over ${I}7 the 13 (${n(9)}) is safe; the 4 (${n(5)}) is a passing note into the 3 (${n(4)}).`)}</>;
+  else if (C.kind === "mixo") body = <>{head(`Fill the gaps: ${I} Mixolydian.`)}{line(`${n(5)} and ${n(9)} fade in dashed. Over ${I}7 the 13 (${n(9)}) is safe; the 4 (${n(5)}) is the avoid note, a b9 above the 3 (${n(4)}): pass through it or resolve it down, never sit on it.`)}</>;
   else if (C.kind === "voicing") body = (
     <>{head(vKind === "grip" ? "Grab it as a chord." : "Drop 3: new bass, new name.", `${vKind === "grip" ? "Drop 2" : "Drop 3"} \u00b7 ${vname(vKind === "grip" ? cur.drop : cur.drop3)}`)}
       {line(vKind === "grip" ? `The same four notes stacked: ${III}\u00f8, or ${I}9 without the root. Comp the shape you solo with.` : "Drop 3: the top note drops to the low E, so the bass changes, and so does the name.")}
       <div style={{ marginTop: 4 }}>{segBtn([{ value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], vKind, (v: string) => setVKind(v))}</div></>
   );
   else body = (
-    <>{segBtn([{ value: "explore", label: "Explore" }, { value: "practise", label: "Practise" }, { value: "quiz", label: "Quiz" }], exMode, (v: string) => { setExMode(v); setReveal(new Set<string>()); setHover(""); setPathRun(0); })}
-      {exMode === "explore" ? (
-        <>{line(NECK[cur.p])}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
-      ) : exMode === "practise" ? (
-        <>{line(`Run ${III}\u00f8 up from the lowest ${III} and back \u00b7 land ${n(2)} on beat 1, resolve to ${I} \u00b7 play Drop 2, then the arpeggio around it.`)}
-          <div style={{ marginTop: 4 }}><button type="button" className="nine-btn" style={btn(false, false)} onClick={() => setPathRun(pathRun + 1)}>Show path</button></div></>
-      ) : (
-        <>{line(`Labels hidden: name each note${intervals ? "'s interval" : ""}, then tap to check. ${quizCount} of ${shown.length} revealed.`)}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
-      )}</>
+    <>{head("Explore the neck.")}{line(cagedLine)}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
   );
 
   const legendSpec: { kind: KeyKind; text: string }[] = [];
   if (shown.some((d: Dot) => d.d === ringDeg)) legendSpec.push({ kind: "root", text: `R = root (${n(ringDeg)})` });
   if (mode === "chord") legendSpec.push({ kind: "fill", text: "chord tones" });
   if (mode === "arp" || mode === "penta" || mode === "mixo") legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 (${n(2)})` : `${n(2)}, the 9 of ${I}` });
-  if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `4 and 6 (${n(5)} ${n(9)})` : `${n(5)} ${n(9)}, the 4 and 6 of ${I}` });
+  if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `4 and 13 (${n(5)} ${n(9)})` : `${n(5)} ${n(9)}, the 4 and 13 of ${I}` });
   if (mode === "grip") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 2" : `Drop 2 \u00b7 ${vname(cur.drop)}` });
   if (mode === "drop3") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 3" : `Drop 3 \u00b7 ${vname(cur.drop3)}` });
   const legend: ReactNode[] = legendSpec.map((it: { kind: KeyKind; text: string }) => <Key key={it.kind + it.text} kind={it.kind}>{it.text}</Key>);
@@ -565,7 +633,7 @@ export default function App() {
   const LAYER_NAME: Record<Mode, string> = { chord: "Chord tones", arp: "Arpeggio", penta: "Pentatonic", mixo: "Mixolydian", grip: "Drop 2", drop3: "Drop 3" };
   const voicing = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : "";
   const frameBase = eff === 0 ? `${I}9` : eff === 4 ? `${III}\u00f8` : `${V}m6`;
-  const shareHead = `${shapeLabel(cur)}: ${shapeName(cur.p, k)} \u00b7 ${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
+  const shareHead = `${shapeLabel(cur)}: ${CAGED[eff][cur.p]} shape from ${n(eff)} \u00b7 ${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
   const shareMeta = `Key of ${keyId} \u00b7 ${intervals ? `Intervals from ${frameBase}` : "Note names"}`;
   const shareName = `${frameBase}-shape${cur.p + 1}-fret${cur.lo}-${LAYER_NAME[mode]}`.toLowerCase().replace(/\u00f8/g, "o").replace(/#/g, "sharp").replace(/[^a-z0-9-]/g, "") + ".png";
   const sharePng = async (): Promise<void> => {
@@ -583,8 +651,8 @@ export default function App() {
     ctx.fillRect(0, 0, S, S);
     let y = M + 44;
     ctx.fillStyle = INK;
-    ctx.font = `400 46px ${SERIF}`;
-    y = wrapText(ctx, "Dominant Pentatonics and Half Diminished Chords", M, y, S - 2 * M, 56);
+    ctx.font = `400 40px ${SERIF}`;
+    y = wrapText(ctx, "Dominant Pentatonics and Half Diminished Chords", M, y, S - 2 * M, 50);
     ctx.fillStyle = INK2;
     ctx.font = `400 26px ${SANS}`;
     y += 46;
@@ -614,8 +682,36 @@ export default function App() {
     // The board: a static copy of the live SVG at its final state (no fades, no animations).
     const clone = svg.cloneNode(true) as SVGSVGElement;
     const vb = svg.viewBox.baseVal;
+    let vbw = vb.width;
+    // On the scrolling neck, share what is on screen (a zoom-sized window), with the string names drawn into it.
+    const sc = document.getElementById("nine-scroll");
+    if (sc) {
+      const vbx = Math.max(0, Math.min(vb.width - ZOOM_W, sc.scrollLeft / (sc.clientWidth / ZOOM_W)));
+      vbw = ZOOM_W;
+      clone.setAttribute("viewBox", `${vbx} 0 ${ZOOM_W} ${vb.height}`);
+      const NS = "http://www.w3.org/2000/svg";
+      const bgr = document.createElementNS(NS, "rect");
+      bgr.setAttribute("x", String(lefty ? vbx + ZOOM_W - 26 : vbx));
+      bgr.setAttribute("y", "0");
+      bgr.setAttribute("width", "26");
+      bgr.setAttribute("height", String(vb.height));
+      bgr.setAttribute("fill", PAGE);
+      clone.appendChild(bgr);
+      STR_NAMES.forEach((nm: string, s: number) => {
+        const tx = document.createElementNS(NS, "text");
+        tx.setAttribute("x", String(lefty ? vbx + ZOOM_W - 18 : vbx + 18));
+        tx.setAttribute("y", String(20 + (5 - s) * 28 + 4));
+        tx.setAttribute("text-anchor", lefty ? "start" : "end");
+        tx.setAttribute("font-size", "11");
+        tx.setAttribute("fill", INK2);
+        tx.textContent = nm;
+        clone.appendChild(tx);
+      });
+    }
+    // Notes that are only faded on screen (the ghosts around a Drop chord) are left out of the image.
+    clone.querySelectorAll('g[data-vis="1"]').forEach((g: Element) => { const c = g.querySelector("circle"); if (c && parseFloat((c as SVGElement).style.opacity || "1") < 0.5) g.remove(); });
     const bw = S - 2 * M;
-    const bh = (bw * vb.height) / vb.width;
+    const bh = (bw * vb.height) / vbw;
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("width", String(bw));
     clone.setAttribute("height", String(bh));
@@ -633,11 +729,14 @@ export default function App() {
     const by = top + Math.max(0, (S - M - top - bh) / 2);
     ctx.drawImage(img, M, by, bw, bh);
     URL.revokeObjectURL(url);
+    ctx.fillStyle = INK2;
+    ctx.font = `400 24px ${SANS}`;
+    ctx.fillText("Advanced Guitar Theory", M, S - 36);
     const blob = await new Promise<Blob | null>((res: (b: Blob | null) => void) => cv.toBlob(res, "image/png"));
     if (!blob) return;
     const file = new File([blob], shareName, { type: "image/png" });
     const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
-    if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+    if (window.matchMedia("(pointer: coarse)").matches && nav.canShare && nav.share && nav.canShare({ files: [file] })) {
       try { await nav.share({ files: [file], title: shareHead }); return; } catch (e) { if ((e as Error).name === "AbortError") return; }
     }
     const a = document.createElement("a");
@@ -655,14 +754,14 @@ export default function App() {
     const q = seq[(raw + seq.length) % seq.length];
     return `${shapeLabel(q)} \u00b7 frets ${q.lo}\u2013${q.hi}${raw < 0 ? " (wraps to the top)" : raw >= seq.length ? " (wraps to the nut)" : ""}`;
   };
-  const STEP_TITLE = [`Here's ${I}7`, "Lose the root, add the 9", "Same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop 2 and Drop 3", "Explore, practise, quiz"];
+  const STEP_TITLE = [`Here's ${I}7`, "Lose the root, add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop 2 and Drop 3", "Explore the whole neck"];
   const tipText = (id: string): string => {
     if (id.startsWith("step")) { const i = Number(id.slice(4)); return `${i + 1} \u00b7 ${STEP_TITLE[i]}`; }
-    if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${shapeName(p, k)}`; }
+    if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}`; }
     if (id === "prev") return nb(-1);
     if (id === "next") return nb(1);
-    if (id === "share") return "Share as image";
-    if (id === "settings") return open ? "Hide settings" : "Settings: labels, key, left-handed";
+    if (id === "play") return playing ? "Stop" : "Play what is shown";
+    if (id === "settings") return open ? "Hide settings" : "Settings: labels, key, neck, share";
     return "";
   };
   const showTip = (id: string, el: Element): void => { const r = el.getBoundingClientRect(); setTip({ id, cx: r.left + r.width / 2, top: r.top, bottom: r.bottom }); };
@@ -684,7 +783,6 @@ export default function App() {
     onTouchMove: () => window.clearTimeout(pressRef.current.t),
     onTouchEnd: (e: { preventDefault: () => void }) => { window.clearTimeout(pressRef.current.t); if (pressRef.current.shown) e.preventDefault(); },
   });
-  const hoverDot = hover ? cur.dots.find((d: Dot) => `${d.s}-${d.f}` === hover) : undefined;
 
   const css = ":root,html,body{color-scheme:only light!important;background:#fdfcfb!important;color:#4d3533!important;margin:0}"
     + " html body #nine-root#nine-root,html body #nine-root#nine-root div,html body #nine-root#nine-root p,html body #nine-root#nine-root h1,html body #nine-root#nine-root h2{color-scheme:only light!important}"
@@ -694,8 +792,14 @@ export default function App() {
     + " #nine-root .nine-seg button::after{content:'';position:absolute;inset:0;background:#4d3533;opacity:0;transition:opacity 150ms ease;pointer-events:none}"
     + " #nine-root .nine-seg button[aria-checked=false]:hover::after{opacity:.07}"
     + " #nine-root .nine-btn:hover:not(:disabled){filter:brightness(.96)} #nine-root .nine-btn-primary:hover:not(:disabled){filter:brightness(1.15)}"
-    + " #nine-root .nine-card{height:100px} #nine-root .nine-card.nine-tall{height:124px} @media (max-width:600px){#nine-root .nine-card{height:118px} #nine-root .nine-card.nine-tall{height:144px}}"
-    + " @keyframes nine-in{from{opacity:0}to{opacity:1}} @keyframes nine-lbl{from{opacity:0}to{opacity:1}} @keyframes nine-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}"
+    + " #nine-root .nine-card{height:100px} #nine-root .nine-card.nine-tall{height:124px} @media (max-width:600px){#nine-root .nine-card{height:118px} #nine-root .nine-card.nine-tall{height:118px}}"
+    + " @media (max-width:380px){#nine-root .nine-layers button{font-size:11.5px!important;padding:0 1px!important}}"
+    + " #nine-root .nine-long{display:none} @media (min-width:560px){#nine-root .nine-short{display:none} #nine-root .nine-long{display:inline}}"
+    + " @media (max-width:380px){#nine-root .nine-step span:last-child{font-size:10px!important}}"
+    + " @media (max-width:340px){#nine-root .nine-step span:last-child{font-size:9.5px!important}}"
+    + " #nine-root .nine-shbtn{display:flex;align-items:center;justify-content:center;gap:5px;flex-direction:row;overflow:hidden} #nine-root .nine-shbtn .cap{font-size:12px;line-height:14px;font-weight:500} #nine-root .nine-shbtn .num{font-size:14px;line-height:16px;font-weight:600}"
+    + " @media (max-width:380px){#nine-root .nine-shbtn{flex-direction:column;gap:0} #nine-root .nine-shbtn .cap{font-size:9.5px;line-height:10px} #nine-root .nine-shbtn .num{font-size:15px;line-height:17px}}"
+    + " @keyframes nine-in{from{opacity:0}to{opacity:1}} @keyframes nine-lbl{from{opacity:0}to{opacity:1}}"
     + " @keyframes nine-r{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}} @keyframes nine-l{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}"
     + " @keyframes nine-pop{from{opacity:0;transform:translateY(-4px) scale(.96)}to{opacity:1;transform:none}}"
     + " @media (hover:hover){#nine-root .nine-arrow:hover:not(:disabled) svg{opacity:.6}}"
@@ -706,16 +810,17 @@ export default function App() {
     <div ref={rootRef} id="nine-root" className="nine-root" style={{ backgroundColor: PAGE, color: INK, colorScheme: "only light", minHeight: "100vh", width: "100%", padding: "12px 16px 16px", fontFamily: SANS, boxSizing: "border-box" }}>
       <style>{css}</style>
       <div style={{ maxWidth: 640, margin: "0 auto", backgroundColor: PAGE, color: INK, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ backgroundColor: PAGE }}>
-          <h1 style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.5px", color: INK, backgroundColor: PAGE, margin: 0 }}>Dominant Pentatonics and Half Diminished Chords</h1>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, backgroundColor: PAGE }}>
+          <h1 style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.5px", color: INK, backgroundColor: PAGE, margin: 0 }}>Dominant Pentatonics</h1>
+          <a href="../../index.html" style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 12.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE, textDecoration: "none" }}>{"← All lessons"}</a>
         </div>
 
         {/* Step chips: progress and navigation in one row. The bar fills up to the current card; tap any chip to jump. */}
-        <nav aria-label="Lesson steps" style={{ display: "grid", gridTemplateColumns: `repeat(${total}, minmax(0,1fr))`, gap: 3, backgroundColor: PAGE }}>
+        <nav aria-label="Lesson steps" style={{ display: "grid", gridTemplateColumns: STEP_LABEL.map((lb: string, i: number) => `minmax(28px,${lb.length + (STEP_LONG[i] ? 4 : 2)}fr)`).join(" "), gap: 3, backgroundColor: PAGE }}>
           {STEP_LABEL.map((lb: string, i: number) => (
-            <button key={lb} type="button" className="nine-step" aria-label={`Step ${i + 1} of ${total}: ${lb}`} aria-current={i === card ? "step" : undefined} {...tipOn(`step${i}`)} onClick={() => go(i)} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, height: 32, minWidth: 0, padding: "2px 0", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+            <button key={lb} type="button" className="nine-step" aria-label={`Step ${i + 1} of ${total}: ${STEP_LONG[i] ?? lb}`} aria-current={i === card ? "step" : undefined} {...tipOn(`step${i}`)} onClick={() => go(i)} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, height: 32, minWidth: 0, padding: "2px 0", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <span style={{ display: "block", height: 4, borderRadius: 2, backgroundColor: i <= card ? TEAL : LINE, transition: "background-color 300ms ease" }} />
-              <span style={{ display: "block", fontFamily: SANS, fontSize: 11, lineHeight: "14px", fontWeight: i === card ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "clip", textAlign: "center", color: i === card ? INK : INK2, backgroundColor: PAGE }}>{lb}</span>
+              <span style={{ display: "block", fontFamily: SANS, fontSize: 11, lineHeight: "14px", fontWeight: i === card ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "clip", textAlign: "center", color: i === card ? INK : INK2, backgroundColor: PAGE }}>{STEP_LONG[i] ? <><span className="nine-short">{lb}</span><span className="nine-long">{STEP_LONG[i]}</span></> : lb}</span>
             </button>
           ))}
         </nav>
@@ -726,14 +831,13 @@ export default function App() {
 
         <div style={{ minHeight: 34, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", backgroundColor: PAGE }}>
-            <span key={`lg${mode}${ringDeg}${keyId}${quiz ? 1 : 0}${quiz ? hover : ""}`} style={{ display: "flex", flexWrap: "wrap", minWidth: 0, columnGap: 12, rowGap: 2, animation: "nine-in 320ms ease both", backgroundColor: PAGE }}>
-              {quiz ? <span style={{ color: INK, backgroundColor: PAGE, whiteSpace: "nowrap" }}>{hoverDot ? (hoverDot.d === 0 ? `${I}: the root of ${I}7` : `${n(hoverDot.d)}: the ${ivName(hoverDot.d, 0)} of ${I}7`) : "Tap a dot to reveal it"}</span> : legend}
+            <span key={`lg${mode}${ringDeg}${keyId}`} style={{ display: "flex", flexWrap: "wrap", minWidth: 0, columnGap: 12, rowGap: 2, animation: "nine-in 320ms ease both", backgroundColor: PAGE }}>
+              {legend}
             </span>
           </div>
-            <button type="button" className="nine-icon" aria-label="Share this diagram as an image" {...tipOn("share")} onClick={() => { void sharePng(); }} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+            <button type="button" className="nine-icon" id="nine-play" aria-label={playing ? "Stop" : "Play what is shown"} aria-pressed={playing} {...tipOn("play")} onClick={playShown} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
-                <path d="M6.5 7.5H4.5v8.5h9V7.5h-2" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
-                <path d="M9 11V2.2M6.2 5L9 2.2L11.8 5" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
+                {playing ? <rect x={4.5} y={4.5} width={9} height={9} rx={1.5} strokeWidth={1.4} style={{ fill: INK, stroke: INK }} /> : <path d="M5 3.2 L14.4 9 L5 14.8 Z" strokeWidth={1.4} strokeLinejoin="round" style={{ fill: PAGE, stroke: INK }} />}
               </svg>
             </button>
             <button type="button" className="nine-icon" aria-label="Display settings" aria-controls="nine-settings" aria-expanded={open} {...tipOn("settings")} onClick={() => setOpen(!open)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 3, height: 32, minWidth: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", outlineOffset: 2, cursor: "pointer", color: INK, backgroundColor: PAGE }}>
@@ -765,33 +869,41 @@ export default function App() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 16, alignItems: "center", backgroundColor: PAGE }}>
                   <Field label="" style={{ gap: 0 }}>
-                    <select value={keyId} onChange={(e: ChangeEvent<HTMLSelectElement>) => { const nk = KEYS.find((x: KeyDef) => x.id === e.target.value) ?? KEYS[0]; const list = instances(nk); let best = homeIndex(list); list.forEach((q: Pos, i: number) => { if (q.p === cur.p && (list[best].p !== cur.p || Math.abs(q.lo - cur.lo) < Math.abs(list[best].lo - cur.lo))) best = i; }); setInst(best); setKeyId(e.target.value); setReveal(new Set<string>()); }} style={{ height: CH, width: "100%", boxSizing: "border-box", fontFamily: SANS, fontSize: CFS, fontWeight: 500, color: INK, backgroundColor: PAGE, border: BORDER, borderRadius: RAD, padding: "0 26px 0 12px", lineHeight: "18px", colorScheme: "only light", cursor: "pointer", backgroundImage: "linear-gradient(45deg, transparent 50%, #4d3533 50%), linear-gradient(135deg, #4d3533 50%, transparent 50%)", backgroundPosition: "calc(100% - 15px) 50%, calc(100% - 10px) 50%", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat" }}>
+                    <select value={keyId} onChange={(e: ChangeEvent<HTMLSelectElement>) => { const nk = KEYS.find((x: KeyDef) => x.id === e.target.value) ?? KEYS[0]; const list = instances(nk); let best = homeIndex(list); list.forEach((q: Pos, i: number) => { if (q.p === cur.p && (list[best].p !== cur.p || Math.abs(q.lo - cur.lo) < Math.abs(list[best].lo - cur.lo))) best = i; }); setInst(best); setKeyId(e.target.value); }} style={{ height: CH, width: "100%", boxSizing: "border-box", fontFamily: SANS, fontSize: CFS, fontWeight: 500, color: INK, backgroundColor: PAGE, border: BORDER, borderRadius: RAD, padding: "0 26px 0 12px", lineHeight: "18px", colorScheme: "only light", cursor: "pointer", backgroundImage: "linear-gradient(45deg, transparent 50%, #4d3533 50%), linear-gradient(135deg, #4d3533 50%, transparent 50%)", backgroundPosition: "calc(100% - 15px) 50%, calc(100% - 10px) 50%", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat" }}>
                       {KEYS.map((x: KeyDef) => <option key={x.id} value={x.id} style={{ color: INK, backgroundColor: PAGE }}>{`Key of ${x.id}`}</option>)}
                     </select>
                   </Field>
                   <Check on={lefty} label="Left-handed" onClick={() => setLefty(!lefty)} />
                 </div>
+                <Field label="Sound">
+                  <select id="nine-sound" value={sound} onChange={(e: ChangeEvent<HTMLSelectElement>) => { const id = e.target.value as InstrumentId; setSound(id); setInstrument(id); }} style={{ height: CH, width: "100%", boxSizing: "border-box", fontFamily: SANS, fontSize: CFS, fontWeight: 500, color: INK, backgroundColor: PAGE, border: BORDER, borderRadius: RAD, padding: "0 26px 0 12px", lineHeight: "18px", colorScheme: "only light", cursor: "pointer", backgroundImage: "linear-gradient(45deg, transparent 50%, #4d3533 50%), linear-gradient(135deg, #4d3533 50%, transparent 50%)", backgroundPosition: "calc(100% - 15px) 50%, calc(100% - 10px) 50%", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat" }}>
+                    {INSTRUMENTS.map((i: { id: InstrumentId; label: string }) => <option key={i.id} value={i.id} style={{ color: INK, backgroundColor: PAGE }}>{i.label}</option>)}
+                  </select>
+                </Field>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 16, alignItems: "end", backgroundColor: PAGE }}>
+                  <Field label="Neck (Explore card)" style={{ opacity: onExplore ? 1 : 0.35, pointerEvents: onExplore ? "auto" : "none", transition: "opacity 200ms ease" }}>
+                    <span id="nine-full" style={{ display: "block", backgroundColor: PAGE }}>{segBtn([{ value: "scroll", label: "Scroll" }, { value: "full", label: "Fit all" }], full ? "full" : "scroll", (v: string) => setFull(v === "full"))}</span>
+                  </Field>
+                  <button type="button" className="nine-btn" aria-label="Share this diagram as an image" id="nine-share" style={btn(false, false)} onClick={() => { void sharePng(); }}>Share image</button>
+                </div>
               </div>
           </div>
         </div>
         {/* Shape row: pick Shape 1-5 directly (nearest position), or use the board arrows / swipe to walk the whole neck. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, height: 28, minWidth: 0, backgroundColor: PAGE }}>
-          <div role="radiogroup" aria-label="Shape" style={{ display: "flex", gap: 4, flex: "0 0 auto", backgroundColor: PAGE }}>
-            {[0, 1, 2, 3, 4].map((p: number) => (
-              <button key={p} type="button" role="radio" aria-checked={cur.p === p} aria-label={`Shape ${p + 1}: ${shapeName(p, k)}`} {...tipOn(`shape${p}`)} onClick={() => pickShape(p)} style={{ height: 28, width: 30, padding: 0, border: `1px solid ${cur.p === p ? INK : LINE}`, borderRadius: 8, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: cur.p === p ? PAGE : INK, backgroundColor: cur.p === p ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease, border-color 200ms ease" }}>{p + 1}</button>
-            ))}
-          </div>
-          <span id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} key={`sh${cur.p}-${cur.lo}-${keyId}`} style={{ flex: 1, minWidth: 0, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: SANS, fontSize: 12, lineHeight: "16px", color: INK2, backgroundColor: PAGE, animation: "nine-in 300ms ease both" }}>
-            <span style={{ color: INK, fontWeight: 600, backgroundColor: PAGE }}>{shapeName(cur.p, k)}</span>{` \u00b7 frets ${cur.lo}\u2013${cur.hi}`}
-          </span>
+        <div id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", height: 36, minWidth: 0, border: `1px solid ${LINE_UI}`, borderRadius: RAD, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
+          {[0, 1, 2, 3, 4].map((p: number) => (
+            <button key={p} type="button" className="nine-shbtn" role="radio" aria-checked={cur.p === p} aria-label={`Shape ${p + 1}: ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}`} {...tipOn(`shape${p}`)} onClick={() => pickShape(p)} style={{ height: "100%", minWidth: 0, padding: 0, border: 0, borderLeft: p > 0 ? `1px solid ${cur.p === p || cur.p === p - 1 ? "transparent" : LINE_UI}` : 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, color: cur.p === p ? PAGE : INK, backgroundColor: cur.p === p ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease, border-color 200ms ease" }}>
+              <span className="cap">Shape</span><span className="num">{p + 1}</span>
+            </button>
+          ))}
         </div>
-        <div style={{ position: "relative", backgroundColor: PAGE }} onTouchStart={(e: { touches: ArrayLike<{ clientX: number; clientY: number }> }) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; }} onTouchEnd={(e: { changedTouches: ArrayLike<{ clientX: number; clientY: number }> }) => { const s = touchRef.current; touchRef.current = null; if (!s) return; const t = e.changedTouches[0]; const dx = t.clientX - s.x; const dy = t.clientY - s.y; if (Math.abs(dx) > 48 && Math.abs(dy) < 36) stepShape(dx < 0 ? (lefty ? -1 : 1) : (lefty ? 1 : -1)); }}>
-          <Board key={`board${jump}`} k={k} shown={shown} wl={Math.max(0, Math.min(cur.lo - 1, MAXF - 6))} step={MODE_STEP[mode]} labelOf={labelOf} ringDeg={ringDeg} lefty={lefty} drop2={mode === "drop3" ? cur.drop3 : cur.drop} interactive={quiz} onHover={(key: string) => setHover(key)} onTap={(key: string) => { const s = new Set<string>(reveal); if (s.has(key)) s.delete(key); else s.add(key); setReveal(s); setHover(key); }} path={C.kind === "explore" && exMode === "practise" && pathRun > 0 ? arpPath : undefined} pathRun={pathRun} />
+        <div style={{ position: "relative", backgroundColor: PAGE }} onTouchStart={(e: { touches: ArrayLike<{ clientX: number; clientY: number }> }) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; }} onTouchEnd={(e: { changedTouches: ArrayLike<{ clientX: number; clientY: number }> }) => { const s = touchRef.current; touchRef.current = null; if (!s) return; const t = e.changedTouches[0]; const dx = t.clientX - s.x; const dy = t.clientY - s.y; if (!scrollOn && Math.abs(dx) > 48 && Math.abs(dy) < 36) stepShape(dx < 0 ? (lefty ? -1 : 1) : (lefty ? 1 : -1)); }}>
+          <Board key={`board${jump}-${fullOn ? 1 : 0}-${scrollOn ? 1 : 0}`} full={fullOn} scroll={scrollOn} onPlay={playDot} onSettle={settleScroll} center={(cur.lo + cur.hi) / 2} band={fullOn ? [cur.lo, cur.hi] : undefined} k={k} shown={shown} wl={Math.max(0, Math.min(cur.lo - 1, MAXF - 6))} step={MODE_STEP[mode]} labelOf={labelOf} ringDeg={ringDeg} lefty={lefty} drop2={mode === "drop3" ? cur.drop3 : cur.drop} />
           {[-1, 1].map((d: number) => {
             const ok = canShape(d);
             const onLeft = lefty ? d > 0 : d < 0;
             return (
-              <button key={d} type="button" className="nine-arrow" aria-label={d < 0 ? "Previous shape, down the neck" : "Next shape, up the neck"} {...tipOn(d < 0 ? "prev" : "next")} disabled={!ok} onClick={() => stepShape(d)} style={{ position: "absolute", top: "10%", height: "71%", width: 36, [onLeft ? "left" : "right"]: -16, display: "flex", alignItems: "center", justifyContent: onLeft ? "flex-start" : "flex-end", padding: "0 3px", border: 0, borderRadius: 0, boxShadow: "none", cursor: ok ? "pointer" : "default", opacity: ok ? 1 : 0.22, transition: "opacity 200ms ease", color: INK }}>
+              <button key={d} type="button" className="nine-arrow" aria-label={d < 0 ? "Previous shape, down the neck" : "Next shape, up the neck"} {...tipOn(d < 0 ? "prev" : "next")} disabled={!ok} onClick={() => stepShape(d)} style={{ position: "absolute", top: "calc(45.5% - 28px)", height: 56, width: 36, borderRadius: 8, [onLeft ? "left" : "right"]: -16, display: "flex", alignItems: "center", justifyContent: onLeft ? "flex-start" : "flex-end", padding: "0 3px", border: 0, boxShadow: "none", cursor: ok ? "pointer" : "default", opacity: ok ? 1 : 0.22, transition: "opacity 200ms ease", color: INK }}>
                 <svg width={12} height={22} viewBox="0 0 12 22" aria-hidden="true" style={{ display: "block" }}>
                   <path d={onLeft ? "M9 3 L3 11 L9 19" : "M3 3 L9 11 L3 19"} fill="none" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
                 </svg>

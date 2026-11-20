@@ -1,7 +1,7 @@
 const p=require('puppeteer-core');(async()=>{const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});
 const S=t=>new Promise(r=>setTimeout(r,t));
 for(const W of [320,360,390,430]){const pg=await b.newPage();await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);await pg.setViewport({width:W,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
- await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../index.html')).href);await S(800);
+ await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../lessons/dominant-pentatonics/index.html')).href);await S(800);
  const out=[];let worst=0, offenders=new Set();
  for(const open of [false,true]){ if(open){await pg.click('.nine-icon');await S(400);}
   for(let c=0;c<14;c++){ if(c>0){await pg.keyboard.press('ArrowRight');} await S(420);

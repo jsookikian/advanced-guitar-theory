@@ -4,9 +4,9 @@
   "private": true,
   "description": "Advanced guitar theory: interactive fretboard lessons (a Forma web app space)",
   "scripts": {
-    "build": "esbuild src/main.tsx --bundle --minify --outfile=app.js --jsx=automatic --alias:grok/canvas=./src/grok-canvas-shim.ts --define:process.env.NODE_ENV='\"production\"'",
-    "watch": "esbuild src/main.tsx --bundle --outfile=app.js --jsx=automatic --alias:grok/canvas=./src/grok-canvas-shim.ts --define:process.env.NODE_ENV='\"development\"' --watch",
-    "serve": "esbuild src/main.tsx --bundle --outfile=app.js --jsx=automatic --alias:grok/canvas=./src/grok-canvas-shim.ts --define:process.env.NODE_ENV='\"development\"' --servedir=. --watch",
+    "build": "node build.mjs",
+    "dev": "node build.mjs --dev",
+    "serve": "python3 -m http.server 8000",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

@@ -1,7 +1,7 @@
 const p=require('puppeteer-core');(async()=>{const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});
 const S=t=>new Promise(r=>setTimeout(r,t));const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
 await pg.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);await pg.setViewport({width:390,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
-await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../index.html')).href);await S(800);
+await pg.goto(require('url').pathToFileURL(require('path').resolve(__dirname,'../../lessons/dominant-pentatonics/index.html')).href);await S(800);
 const st=()=>pg.evaluate(()=>{const a=[...document.querySelectorAll('.nine-arrow')];return document.body.innerText.match(/Step \d+/)[0]+' | '+document.getElementById('nine-board').getAttribute('aria-label')+' | '+document.querySelector('.nine-card h2').textContent+' | arrows '+a.map(x=>(x.disabled?'off':'on')+'@'+Math.round(x.getBoundingClientRect().left)+'-'+Math.round(x.getBoundingClientRect().right)+'x'+Math.round(x.getBoundingClientRect().height)).join(' ')});
 const R=async()=>{await pg.click('.nine-arrow[aria-label^="Next"]');await S(700);};const L=async()=>{await pg.click('.nine-arrow[aria-label^="Prev"]');await S(700);};
 console.log('card1', await st()); await R(); console.log('card1 →', await st());
