@@ -456,16 +456,21 @@ interface BeatSpec { lit: Lit; ring?: number; mode?: Mode; step: Step }
 const BEAT_SPEC: Record<string, BeatSpec[]> = {
   c7: [{ lit: CHORD, step: 1 }, { lit: [0], step: 1 }, { lit: [4, 7, 10], step: 1 }],
   lose: [{ lit: [0], step: 1 }, { lit: [4, 7, 10], step: 1 }, { lit: [4, 7, 10], step: 1 }],
-  nine: [{ lit: [2], step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }],
+  nine: [{ lit: [2], step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }],
   names: [{ lit: ARP, ring: 4, step: 2 }, { lit: ARP, ring: 7, step: 2 }, { lit: ARP, ring: 0, step: 2 }],
   penta: [{ lit: ARP, step: 2 }, { lit: "penta", step: 2 }, { lit: ARP, step: 2 }],
-  mixo: [{ lit: "penta", step: 3 }, { lit: [5, 9], step: 3 }, { lit: [9], step: 3 }, { lit: [5, 4], step: 3 }],
-  voicing: [{ lit: "drop2", mode: "grip", step: 4 }, { lit: "drop3", mode: "drop3", step: 4 }],
+  mixo: [{ lit: "penta", step: 3 }, { lit: [5, 9], step: 3 }, { lit: [9], step: 3 }, { lit: [5, 4], step: 3 }, { lit: [10, 4, 2], step: 3 }, { lit: [9, 5, 0], step: 3 }],
+  voicing: [{ lit: "drop2", mode: "grip", step: 4 }, { lit: "drop3", mode: "drop3", step: 4 }, { lit: ARP, mode: "arp", step: 2 }],
 };
 function homeIndex(list: Pos[]): number {
   const i = list.findIndex((q: Pos) => q.p === 0 && q.lo >= 1);
   return i >= 0 ? i : 0;
 }
+
+// Injected by build.mjs from lesson.json ("helps to know": background that helps but is not required).
+interface Helpful { topic: string; why: string; href: string | null }
+declare const __HELPFUL__: Helpful[];
+const HELPFUL: Helpful[] = __HELPFUL__;
 
 export default function App() {
   const [card, setCard] = useState<number>(0);
@@ -476,6 +481,7 @@ export default function App() {
   const [frame, setFrame] = useState<string>("0");
   const [lefty, setLefty] = useState<boolean>(false);
   const [open, setOpen] = useState<boolean>(false);
+  const [helpOpen, setHelpOpen] = useState<boolean>(false);
   const [layerMode, setLayerMode] = useState<string>("penta");
   const [inst, setInst] = useState<number>(-1);
   const [jump, setJump] = useState<number>(0);
@@ -689,7 +695,7 @@ export default function App() {
         { text: <>{chip(4)}, {chip(7)} and {chip(10)} are the 3, 5 and b7. They give it the dominant sound.</>, name: `${I}7` },
       ] };
       case "lose": return { head: "Lose the root.", beats: [
-        { text: <>In a band the bass player usually plays the root: every {chip(0)} on the board.</>, name: `${I}7` },
+        { text: <>When you comp behind a soloist, the bass player usually plays the root: every {chip(0)} on the board.</>, name: `${I}7` },
         { text: <>So you can leave it out. Every {chip(0)} fades away.</>, name: `${I}7 no root` },
         { text: <>{chips([4, 7, 10])} are what is left, and they still say {I}7: the 3, 5 and b7 carry the sound.</>, name: `${I}7 no root` },
       ] };
@@ -697,6 +703,7 @@ export default function App() {
         { text: <>Now add one note: the 9, {chip(2)}. It sits a whole step above the root.</>, name: `${n(2)}, the 9 of ${I}` },
         { text: <>{chips(ARP)}: four notes again, now with a new colour.</>, name: `${I}9 no root` },
         { text: <>These four notes, {chips(ARP)}, are {III}{"\u00f8"} or {V}m6</>, name: `${I}9 no root` },
+        { text: <>Try it: over {I}7, play an {III}{"\u00f8"} or {V}m6 arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
       ] };
       case "names": return { head: "Chord Synonyms.", beats: [
         { text: <>Read the same four notes from {chip(4, 4)}: R, b3, b5, b7. That is {III}{"\u00f8"}.</>, name: `${III}\u00f8` },
@@ -713,10 +720,13 @@ export default function App() {
         { text: <>Fill them: {chip(5)} and {chip(9)}. That makes {I} Mixolydian.</>, name: `${I} Mixolydian` },
         { text: <>{chip(9)} is the 13, a safe colour tone over {I}7.</>, name: `${I} Mixolydian` },
         { text: <>{chip(5)} is the avoid note, a b9 above the 3: pass through it or resolve down to {chip(4)}.</>, name: `${I} Mixolydian` },
+        { text: <>Where it lands: over {I}7 the moving notes are {chips([10, 4, 2])}.</>, name: `${I}7` },
+        { text: <>Resolve to {n(5)}: {chip(10)} falls to {chip(9)}, {chip(4)} rises to {chip(5)}, {chip(2)} falls to {chip(0)}. Each moves one step.</>, name: `${n(5)}` },
       ] };
       default: return { head: "Play it as a chord.", beats: [
         { text: <>Play four of the notes together: Drop 2. That is {III}{"\u00f8"} on the top four strings, or {I}9 without its root.</>, name: dr(cur.drop, "Drop 2") },
         { text: <>Drop 3: move the top note down to the low E. New bass, new name.</>, name: dr(cur.drop3, "Drop 3") },
+        { text: <>Your turn: play the {III}{"\u00f8"} arpeggio over {I}7, then land on {chip(9)} as the chord moves to {n(5)}.</>, name: `${III}\u00f8` },
       ] };
     }
   };
@@ -939,6 +949,21 @@ export default function App() {
           <h1 style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.5px", color: INK, backgroundColor: PAGE, margin: 0 }}>Dominant Pentatonics</h1>
           <a href="/" style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 12.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE, textDecoration: "none" }}>{"← All lessons"}</a>
         </div>
+        {card === 0 && beat === 0 && HELPFUL.length > 0 ? (
+          <div className={helpOpen ? "nine-q" : "nine-q nine-quiet"} style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
+            <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{helpOpen ? "Helps to know \u25b4" : "Helps to know \u25be"}</button>
+            {helpOpen ? (
+              <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
+                {HELPFUL.map((h: Helpful) => (
+                  <li key={h.topic} style={{ backgroundColor: PAGE }}>
+                    {h.href ? <a href={h.href} style={{ color: INK, backgroundColor: PAGE }}>{h.topic}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{h.topic}</span>}
+                    {h.href ? "" : " (coming soon)"}: {h.why}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Step chips: progress and navigation in one row. The bar fills up to the current card; tap any chip to jump. */}
         <nav aria-label="Lesson steps" className="nine-q nine-quiet" style={{ display: "grid", gridTemplateColumns: STEP_LABEL.map((lb: string, i: number) => `minmax(28px,${lb.length + (STEP_LONG[i] ? 4 : 2)}fr)`).join(" "), gap: 3, backgroundColor: PAGE }}>

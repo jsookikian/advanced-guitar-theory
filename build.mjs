@@ -10,9 +10,13 @@ const dev = process.argv.includes("--dev");
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ids = readdirSync("src/lessons", { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(`src/lessons/${d.name}/main.tsx`)).map((d) => d.name);
 
+const metas = Object.fromEntries(ids.map((id) => [id, JSON.parse(readFileSync(`lessons/${id}/lesson.json`, "utf8"))]));
+// "Helps to know": lesson.json lists helpful (not required) background as { topic, why, lesson? }. A topic links to its lesson once
+// that lesson exists; until then it reads "coming soon".
+const helpful = (meta) => (meta.helpful ?? []).map((h) => ({ topic: h.topic, why: h.why, href: h.lesson && metas[h.lesson] ? `/lessons/${h.lesson}/index.html` : null }));
 const lessons = [];
 for (const id of ids) {
-  const meta = JSON.parse(readFileSync(`lessons/${id}/lesson.json`, "utf8"));
+  const meta = metas[id];
   await build({
     entryPoints: [`src/lessons/${id}/main.tsx`],
     bundle: true,
@@ -20,7 +24,7 @@ for (const id of ids) {
     outfile: `lessons/${id}/app.js`,
     jsx: "automatic",
     alias: { "grok/canvas": "./src/shared/grok-canvas-shim.ts" },
-    define: { "process.env.NODE_ENV": dev ? '"development"' : '"production"' },
+    define: { "process.env.NODE_ENV": dev ? '"development"' : '"production"', __HELPFUL__: JSON.stringify(helpful(meta)) },
     logLevel: "warning",
   });
   writeFileSync(`lessons/${id}/index.html`, `<!doctype html>
@@ -42,7 +46,7 @@ for (const id of ids) {
 }
 lessons.sort((a, b) => a.order - b.order);
 
-const items = lessons.map((l) => `    <li><a href="/lessons/${l.id}/index.html"><span class="lvl">${esc(l.level)}</span><span class="ttl">${esc(l.title)}</span><span class="sum">${esc(l.summary)}</span></a></li>`).join("\n");
+const items = lessons.map((l) => `    <li><a href="/lessons/${l.id}/index.html"><span class="lvl">${esc(l.level)}</span><span class="ttl">${esc(l.title)}</span><span class="sum">${esc(l.summary)}</span>${l.helpful?.length ? `<span class="help">Helps to know: ${esc(l.helpful.map((h) => h.topic).join(", "))}</span>` : ""}</a></li>`).join("\n");
 writeFileSync("index.html", `<!doctype html>
 <html lang="en">
 <head>
@@ -64,6 +68,7 @@ a:focus-visible{outline:2px solid #0f766e;outline-offset:2px}
 .lvl{font-size:11.5px;font-weight:600;letter-spacing:.02em;color:#0f766e}
 .ttl{font-family:Aime,Georgia,serif;font-size:21px;line-height:26px;letter-spacing:-.4px}
 .sum{font-size:14px;line-height:20px;font-weight:350;color:#806a68}
+.help{font-size:12.5px;line-height:18px;font-weight:350;color:#806a68;border-top:1px solid #eee9e8;padding-top:6px;margin-top:2px}
 .credit{font-size:11.5px;line-height:16px;color:#806a68;margin:24px 0 0}
 </style>
 </head>

@@ -2,5 +2,23 @@
   "title": "Dominant Pentatonics and Half Diminished Chords",
   "summary": "Over a dominant chord, drop the root and add the 9: one shape with three names (C9, Eø, Gm6), then the whole neck.",
   "level": "Advanced",
-  "order": 1
+  "order": 1,
+  "helpful": [
+    {
+      "topic": "the five pentatonic shapes",
+      "why": "The lesson walks the neck one shape at a time."
+    },
+    {
+      "topic": "what Mixolydian is",
+      "why": "Step 6 names its two extra notes, the 4 and the 13."
+    },
+    {
+      "topic": "comping behind a bass player",
+      "why": "It is why you can leave the root out of a chord."
+    },
+    {
+      "topic": "chord synonyms (Eø = Gm6, Am7 = C6)",
+      "why": "One set of notes, several names."
+    }
+  ]
 }
