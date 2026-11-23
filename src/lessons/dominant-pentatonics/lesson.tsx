@@ -796,11 +796,12 @@ export default function App() {
   const LAYER_NAME: Record<Mode, string> = { chord: "Chord tones", arp: "Arpeggio", penta: "Pentatonic", mixo: "Mixolydian", grip: "Drop 2", drop3: "Drop 3" };
   const voicing = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : "";
   // The bold chord name under the board.
-  // Explore's name block above the board: the chord (or voicing) in big bold type, the layer under it.
+  // Explore's name block above the board: the chord (or voicing) in big bold type; a Drop voicing adds its name underneath.
   const nameEff = show === "notes" ? 0 : eff;
   const frameName = nameEff === 0 ? `${I}9 Rootless` : nameEff === 4 ? `${III}\u00f8` : `${V}m6`;
   const exTitle = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : frameName;
-  const exSub = (mode === "penta" ? `${I} dominant pentatonic` : mode === "mixo" ? `${I} Mixolydian` : LAYER_NAME[mode]) + (show === "notes" ? " \u00b7 note names" : "");
+  // Only a Drop 2 / Drop 3 voicing gets a second line; every other layer is just the chord, like a chord diagram.
+  const exSub = mode === "grip" || mode === "drop3" ? LAYER_NAME[mode] : "";
   const caption = cb ? cb.name : `${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
   const frameBase = eff === 0 ? `${I}9` : eff === 4 ? `${III}\u00f8` : `${V}m6`;
   const shareName = `${frameBase}-shape${cur.p + 1}-fret${cur.lo}-${LAYER_NAME[mode]}`.toLowerCase().replace(/\u00f8/g, "o").replace(/#/g, "sharp").replace(/[^a-z0-9-]/g, "") + ".png";
@@ -1073,7 +1074,7 @@ export default function App() {
           <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 46, padding: "0 36px", backgroundColor: PAGE, textAlign: "center" }}>
             <div style={{ minWidth: 0, backgroundColor: PAGE }}>
               <div id="nine-name-title" style={{ fontFamily: SANS, fontSize: 24, fontWeight: 700, lineHeight: "28px", letterSpacing: "-0.3px", color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{exTitle}</div>
-              <div id="nine-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{exSub}</div>
+              {exSub ? <div id="nine-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{exSub}</div> : null}
             </div>
             <button type="button" className="nine-icon" id="nine-share-quick" aria-label="Share this diagram as an image" onClick={() => { void sharePng(); }} style={{ position: "absolute", right: 0, top: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
