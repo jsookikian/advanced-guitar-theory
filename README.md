@@ -43,3 +43,7 @@ House rules every lesson follows (from lesson 1): white paper look, light only, 
 ## Forma
 
 This repo is a Forma Managed web app space. The platform serves it flat by path: the catalog at `/`, a lesson at `/lessons/<id>/index.html`. Our organization allows only `sqsp` GitHub repositories as a deploy source, so the space is bound by files upload rather than to this repo: after changes, from the repo root, run `forma redeploy` (the CLI needs `forma login --server https://tryforma.com` once). Nothing is deployed from a push. Forma serves every page with `<base href="/">`, so pages and scripts use root-absolute paths (`/lessons/<id>/app.js`, `/sounds/`). Use `forma redeploy --clean` when files have moved or been removed, because a plain redeploy does not delete old files.
+
+## Hosting
+
+The site is plain static files and works at a domain root or under a subpath. Every path the pages load (the lesson script, sounds, fonts, the link back to the catalog) is built from `SITE_ROOT` (`src/shared/site-root.ts`), which is whatever comes before `lessons/` in the address. GitHub Pages serves it from the `main` branch root at `https://<user>.github.io/advanced-guitar-theory/`; `tests/subpath.js` checks that case.

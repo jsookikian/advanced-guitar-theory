@@ -13,7 +13,7 @@ const ids = readdirSync("src/lessons", { withFileTypes: true }).filter((d) => d.
 const metas = Object.fromEntries(ids.map((id) => [id, JSON.parse(readFileSync(`lessons/${id}/lesson.json`, "utf8"))]));
 // "Helps to know": lesson.json lists helpful (not required) background as { topic, why, lesson? }. A topic links to its lesson once
 // that lesson exists; until then it reads "coming soon".
-const helpful = (meta) => (meta.helpful ?? []).map((h) => ({ topic: h.topic, why: h.why, href: h.lesson && metas[h.lesson] ? `/lessons/${h.lesson}/index.html` : null }));
+const helpful = (meta) => (meta.helpful ?? []).map((h) => ({ topic: h.topic, why: h.why, href: h.lesson && metas[h.lesson] ? `lessons/${h.lesson}/index.html` : null }));
 const lessons = [];
 for (const id of ids) {
   const meta = metas[id];
@@ -38,7 +38,7 @@ for (const id of ids) {
 </head>
 <body style="margin:0;background:#fdfcfb">
 <div id="root"></div>
-<script src="/lessons/${id}/app.js"></script>
+<script>(function(){var m=/^(.*\\/)lessons\\//.exec(location.pathname),r=m?m[1]:"/",s=document.createElement("script");s.src=r+"lessons/${id}/app.js";document.body.appendChild(s)})()</script>
 </body>
 </html>
 `);
@@ -46,7 +46,7 @@ for (const id of ids) {
 }
 lessons.sort((a, b) => a.order - b.order);
 
-const items = lessons.map((l) => `    <li><a href="/lessons/${l.id}/index.html"><span class="lvl">${esc(l.level)}</span><span class="ttl">${esc(l.title)}</span><span class="sum">${esc(l.summary)}</span>${l.helpful?.length ? `<span class="help">Helps to know: ${esc(l.helpful.map((h) => h.topic).join(", "))}</span>` : ""}</a></li>`).join("\n");
+const items = lessons.map((l) => `    <li><a href="lessons/${l.id}/index.html"><span class="lvl">${esc(l.level)}</span><span class="ttl">${esc(l.title)}</span><span class="sum">${esc(l.summary)}</span>${l.helpful?.length ? `<span class="help">Helps to know: ${esc(l.helpful.map((h) => h.topic).join(", "))}</span>` : ""}</a></li>`).join("\n");
 writeFileSync("index.html", `<!doctype html>
 <html lang="en">
 <head>

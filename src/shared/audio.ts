@@ -15,7 +15,9 @@ export const INSTRUMENTS: { id: InstrumentId; label: string; file: string }[] = 
 
 let ctx: AC | null = null;
 let bus: GainNode | null = null;
-let baseUrl = "/sounds/";
+import { SITE_ROOT } from "./site-root";
+
+let baseUrl = `${SITE_ROOT}sounds/`;
 let instrument: InstrumentId = "nylon";
 // Raw data URLs per instrument (parsed once from the soundfont file) and decoded buffers per instrument and pitch.
 const fonts = new Map<InstrumentId, Promise<Map<string, string> | null>>();
