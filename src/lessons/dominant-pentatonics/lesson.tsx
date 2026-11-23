@@ -446,7 +446,7 @@ function instances(k: KeyDef): Pos[] {
 // Short labels for the step chips (the progress row doubles as navigation: any card is one tap away).
 // Third chip: "Synonyms" on a phone, "Chord Synonyms" once there is room (CSS swaps the two spans).
 const STEP_LABEL = ["C7", "Rootless", "The 9", "Synonyms", "Pentatonic", "Mixolydian", "Drop", "Explore"];
-const STEP_LONG: Record<number, string> = { 3: "Chord Synonyms" };
+const STEP_LONG: Record<number, string> = { 3: "Chord Synonyms", 6: "Drop Voicings" };
 // The guided steps: each makes one statement on one fixed position (Shape 1), dims every note that is not part of it and lights the ones that are.
 const GUIDED = new Set<string>(["c7", "lose", "nine", "names", "penta", "mixo", "voicing"]);
 // Each guided step is a few beats. A beat says one thing: it lights the notes that sentence is about and dims everything else
@@ -895,7 +895,7 @@ export default function App() {
     if (!q) return d < 0 ? "This is the lowest copy, at the nut" : "This is the highest copy";
     return `${shapeLabel(q)} \u00b7 frets ${q.lo}\u2013${q.hi}`;
   };
-  const STEP_TITLE = [`${I}7 is four notes`, "Rootless Chords", "Add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop 2 and Drop 3", "Explore the whole neck"];
+  const STEP_TITLE = [`${I}7 is four notes`, "Rootless Chords", "Add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop Voicings: Drop 2 and Drop 3", "Explore the whole neck"];
   const tipText = (id: string): string => {
     if (id.startsWith("step")) { const i = Number(id.slice(4)); return `${i + 1} \u00b7 ${STEP_TITLE[i]}`; }
     if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? " \u00b7 tap again for the next octave" : ""}`; }
