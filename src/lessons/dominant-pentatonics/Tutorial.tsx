@@ -23,24 +23,26 @@ const pill = (primary: boolean): CSSProperties => ({
   fontFamily: SANS, fontSize: 14, fontWeight: 500, lineHeight: "18px", color: primary ? PAGE : INK, backgroundColor: primary ? INK : PAGE,
 });
 
-export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep) => void; onClose: (finished: boolean) => void }) {
+export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep) => boolean; onClose: (finished: boolean) => void }) {
   const { steps, onStep, onClose } = props;
   const [i, setI] = useState<number>(0);
-  const wasSettings = useRef<boolean>(false);
   const [box, setBox] = useState<Box | null>(null);
   const [cardTop, setCardTop] = useState<number>(12);
   const cardRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<Box | null>(null);
+  boxRef.current = box;
   const pad = 6;
   const step = steps[i];
   const last = i === steps.length - 1;
 
-  // On every step: go to the card the control lives on, wait for it to exist, bring it into view, then measure it
-  // (once at once, once after the card's slide-in has settled).
+  // On every step: go to the card the control lives on. If that changed the screen (another card or beat, the settings panel opening or
+  // closing), the spotlight and the note fade out, the page settles, and they fade in on the new target; if nothing moved they glide.
   useEffect(() => {
-    onStep(step); // the old spotlight stays until the new one is measured, so it glides instead of blinking out
+    const moved = onStep(step);
+    if (moved) setBox(null);
     let alive = true;
     const timers: number[] = [];
-    const measure = (): void => {
+    const measure = (far: boolean = false): void => {
       const el = document.querySelector(step.sel);
       if (!alive || !el) return;
       const r = el.getBoundingClientRect();
@@ -48,7 +50,10 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
       const q = o ? o.getBoundingClientRect() : r;
       const top = Math.min(r.top, q.top);
       const left = Math.min(r.left, q.left);
-      setBox({ top, left, width: Math.max(r.right, q.right) - left, height: Math.max(r.bottom, q.bottom) - top });
+      const nb = { top, left, width: Math.max(r.right, q.right) - left, height: Math.max(r.bottom, q.bottom) - top };
+      // A long way to travel (more than 240 px) fades out and in instead of racing across the screen.
+      const prev = boxRef.current;
+      if (far && prev && Math.abs(nb.top - prev.top) > 240) { setBox(null); timers.push(window.setTimeout(() => { if (alive) setBox(nb); }, 260)); } else setBox(nb);
     };
     let tries = 0;
     const find = (): void => {
@@ -57,17 +62,14 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
       if (!el) { if (tries++ < 20) timers.push(window.setTimeout(find, 100)); return; }
       const r = el.getBoundingClientRect();
       if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "center" });
-      measure();
-      timers.push(window.setTimeout(measure, 450));
+      measure(true);
     };
-    // The settings panel opens and closes in 280 ms and moves everything under it: let it finish first, so the spotlight
-    // is measured once at its final size and never changes shape on the way.
-    const settle = step.settings || wasSettings.current ? 320 : 0;
-    wasSettings.current = !!step.settings;
-    timers.push(window.setTimeout(find, (step.at ? 120 : 0) + settle));
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => { alive = false; timers.forEach((t: number) => window.clearTimeout(t)); window.removeEventListener("resize", measure); window.removeEventListener("scroll", measure, true); };
+    // 420 ms covers the card's 340 ms slide and the settings panel's 280 ms; measuring once, after it, means the spotlight never chases moving content.
+    timers.push(window.setTimeout(find, moved ? 420 : 0));
+    const onMove = (): void => measure();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => { alive = false; timers.forEach((t: number) => window.clearTimeout(t)); window.removeEventListener("resize", onMove); window.removeEventListener("scroll", onMove, true); };
   }, [i]);
 
   // Put the note right below the lit control, or above it when there is no room; never off screen.
@@ -92,7 +94,7 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
   }, [last]);
 
     return (
-    <div role="dialog" aria-modal="true" aria-label="Tutorial" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, pointerEvents: "none", backgroundColor: box ? "transparent" : "rgba(40,25,24,0.55)", animation: `tut-fade 260ms ${EASE} both` }}>
+    <div role="dialog" aria-modal="true" aria-label="Tutorial" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, pointerEvents: "none", backgroundColor: box ? "rgba(40,25,24,0)" : "rgba(40,25,24,0.55)", transition: `background-color 200ms ${EASE}`, animation: `tut-fade 260ms ${EASE} both` }}>
       <style>{"@keyframes tut-fade{from{opacity:0}to{opacity:1}} @keyframes tut-swap{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}} @media (prefers-reduced-motion:reduce){[role=dialog],[role=dialog] *{animation:none!important;transition:none!important}}"}</style>
       {/* Click shield: the whole page, or (on a live step) everything around the lit control. */}
       {!box || !step.live ? (

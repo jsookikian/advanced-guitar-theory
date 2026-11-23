@@ -361,7 +361,7 @@ function Seg(props: { options: { value: string; label: string }[]; value: string
 }
 
 // Quiet tabs for Explore's pickers: no boxes, no fills; the chosen one is dark, bold and underlined, the rest are grey text on a hairline.
-function Tabs(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; weights?: number[]; className?: string; label: string }) {
+function Tabs(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; weights?: number[]; className?: string; label: string; wrap?: boolean; size?: number }) {
   const { options, value, onChange } = props;
   const w = props.weights && props.weights.length === options.length ? props.weights : options.map(() => 1);
   return (
@@ -369,7 +369,7 @@ function Tabs(props: { options: { value: string; label: string }[]; value: strin
       {options.map((o: { value: string; label: string }) => {
         const on = o.value === value;
         return (
-          <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.value)} style={{ minWidth: 0, padding: 0, border: 0, borderRadius: 0, cursor: "pointer", fontFamily: SANS, fontSize: 13.5, fontWeight: on ? 700 : 400, lineHeight: "20px", whiteSpace: "nowrap", color: on ? INK : INK2, backgroundColor: PAGE, boxShadow: on ? `inset 0 -2px 0 ${INK}` : "none", transition: "color 200ms ease, box-shadow 200ms ease" }}>{o.label}</button>
+          <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.value)} style={{ minWidth: 0, padding: 0, border: 0, borderRadius: 0, cursor: "pointer", fontFamily: SANS, fontSize: props.size ?? 13.5, fontWeight: on ? 700 : 400, lineHeight: props.wrap ? "15px" : "20px", whiteSpace: props.wrap ? "normal" : "nowrap", color: on ? INK : INK2, backgroundColor: PAGE, boxShadow: on ? `inset 0 -2px 0 ${INK}` : "none", transition: "color 200ms ease, box-shadow 200ms ease" }}>{o.label}</button>
         );
       })}
     </div>
@@ -474,7 +474,7 @@ function homeIndex(list: Pos[]): number {
 // The first-time tour: each step lights one control (CSS selector) on the card it lives on (`at` = card, beat).
 const TUT_SEEN = "agt-dominant-pentatonics-tutorial-seen";
 const TUT_STEPS: TutStep[] = [
-  { at: [0, 0], live: true, sel: "#nine-board", title: "The fretboard", text: "Six strings, frets 1 to 7. Every dot is a note of the chord or scale. Tap any dot to hear it." },
+  { at: [0, 0], live: true, sel: "#nine-scroll, #nine-board", title: "The fretboard", text: "Six strings, frets 1 to 7. Every dot is a note of the chord or scale. Tap any dot to hear it." },
   { at: [0, 0], live: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board. Tap one to spotlight that note on the board and hear it." },
   { at: [0, 0], live: true, sel: "#nine-hear", title: "Hear it", text: "Plays what is lit on the board, so you hear exactly what the sentence is about." },
   { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals ([R] [3] [5] [b7]) and note names ([C] [E] [G] [Bb]). The root is always red." },
@@ -482,9 +482,9 @@ const TUT_STEPS: TutStep[] = [
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "The lesson has eight steps. Tap any one to jump straight to it." },
   { at: [0, 0], sel: "#nine-name + div", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
   { at: [2, 2], sel: ".nine-card p button[aria-pressed]", title: "Chord names are buttons", text: "A chord name with a dotted underline is a button. Tap it to count the board's intervals from that chord, and tap it again to go back." },
-  { at: [7, 0], live: true, sel: "#nine-shape", title: "Explore: the five shapes", text: "The last step opens the whole neck. Pick one of the five shapes. Tap the selected one again (it shows \u2195) to move it an octave." },
-  { at: [7, 0], live: true, sel: "#nine-board", title: "Walk the neck", text: "Swipe or scroll the neck, or use the arrows at its edges, to move up and down the shapes." },
-  { at: [7, 0], live: true, sel: "#nine-labels", title: "Label the dots", text: "Notes shows note names. The other three count intervals from a chord: the rootless C9, E\u00f8 or Gm6. Same notes, three names." },
+  { at: [7, 0], live: true, sel: "#nine-shape", title: "Explore: the five shapes", text: "The last step opens the whole neck. Pick one of the five shapes. The \u2212 and + under the board\u2019s arrows move it an octave down or up." },
+  { at: [7, 0], live: true, sel: "#nine-scroll, #nine-board", title: "Walk the neck", text: "Swipe or scroll the neck, or use the arrows at its edges, to move up and down the shapes." },
+  { at: [7, 0], live: true, sel: "#nine-labels", title: "Label the dots", text: "Note Names shows the notes. The other three count intervals from a chord: the rootless C9, E\u00f8 or Gm6. Same notes, three names." },
   { at: [7, 0], live: true, sel: "#nine-name", title: "What you are looking at", text: "The chord or voicing on the board, with its layer underneath. The arrow at the right shares the diagram as an image." },
   { at: [7, 0], live: true, sel: "#nine-play", title: "Play", text: "Plays the notes of the shape from low to high. Tap again to stop." },
 ];
@@ -506,6 +506,8 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState<boolean>(false);
   const [tut, setTut] = useState<boolean>(false);
   const tutFrom = useRef<{ card: number; beat: number }>({ card: 0, beat: 0 });
+  const beatRef = useRef<number>(0);
+  const openRef = useRef<boolean>(false);
   const [layerMode, setLayerMode] = useState<string>("penta");
   const [inst, setInst] = useState<number>(-1);
   const [jump, setJump] = useState<number>(0);
@@ -535,6 +537,8 @@ export default function App() {
   };
   const cardRef = useRef<number>(0);
   cardRef.current = card;
+  beatRef.current = beat;
+  openRef.current = open;
   const frameRef = useRef<string>("0");
   frameRef.current = frame;
   const navRef = useRef<{ next: () => void; prev: () => void; key: (d: number) => void }>({ next: () => {}, prev: () => {}, key: () => {} });
@@ -680,7 +684,7 @@ export default function App() {
 
   const layerSeg = () => tabsBtn("Layer", [{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7], "nine-layers");
 
-  const tabsBtn = (label: string, o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Tabs label={label} options={o} value={v} onChange={on} weights={weights} className={className} />;
+  const tabsBtn = (label: string, o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string, wrap?: boolean, size?: number) => <Tabs label={label} options={o} value={v} onChange={on} weights={weights} className={className} wrap={wrap} size={size} />;
   const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Seg options={o} value={v} onChange={on} weights={weights} className={className} />;
   const ink = spot !== null ? "rgba(77,53,51,0.2)" : INK;
   const head = (t: string, extra?: string) => (
@@ -956,6 +960,29 @@ export default function App() {
     + " @media (hover:hover){#nine-root .nine-icon:hover svg{opacity:.6}} #nine-root .nine-icon svg{transition:opacity 150ms ease}"
     + " html,body{overflow-x:hidden!important;max-width:100%} #nine-root{overflow-x:clip;max-width:100vw} #nine-root svg{max-width:100%}";
 
+  // Play and Settings: in the controls row on the guided steps; on Explore they sit at the top right of the card, so the label tabs get the full width.
+  const playToggle = (
+    <button type="button" className="nine-icon" id="nine-play" aria-label={playing ? "Stop" : "Play what is shown"} aria-pressed={playing} {...tipOn("play")} onClick={playShown} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+              <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
+                {playing ? <rect x={4.5} y={4.5} width={9} height={9} rx={1.5} strokeWidth={1.4} style={{ fill: INK, stroke: INK }} /> : <path d="M5 3.2 L14.4 9 L5 14.8 Z" strokeWidth={1.4} strokeLinejoin="round" style={{ fill: PAGE, stroke: INK }} />}
+              </svg>
+            </button>
+  );
+  const settingsToggle = (
+    <button type="button" className="nine-icon nine-quiet" aria-label="Display settings" aria-controls="nine-settings" aria-expanded={open} {...tipOn("settings")} onClick={() => setOpen(!open)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 3, height: 32, minWidth: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", outlineOffset: 2, cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+              <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
+                {[[4, 6], [9, 12], [14, 8]].map((yx: number[]) => (
+                  <g key={yx[0]}>
+                    <line x1={2} x2={16} y1={yx[0]} y2={yx[0]} strokeWidth={1.4} strokeLinecap="round" style={{ stroke: INK }} />
+                    <circle cx={yx[1]} cy={yx[0]} r={2.1} strokeWidth={1.4} style={{ fill: PAGE, stroke: INK }} />
+                  </g>
+                ))}
+              </svg>
+              <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true" style={{ display: "block", transform: open ? "rotate(180deg)" : "none", transition: `transform 200ms ${EASE}` }}>
+                <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
+              </svg>
+            </button>
+  );
   return (
     <div ref={rootRef} id="nine-root" className="nine-root" data-spot={spot !== null ? "1" : "0"} data-guided={guided ? "1" : "0"} style={{ backgroundColor: PAGE, color: INK, colorScheme: "only light", minHeight: "100vh", width: "100%", padding: "12px 16px 16px", fontFamily: SANS, boxSizing: "border-box" }}>
       <style>{css}</style>
@@ -994,6 +1021,7 @@ export default function App() {
         </nav>
 
         <div className={C.kind === "explore" ? "nine-card nine-tall" : "nine-card"} style={{ position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", backgroundColor: PAGE }}>
+          {!guided ? <div style={{ position: "absolute", top: 0, right: 0, display: "flex", alignItems: "center", gap: 4, zIndex: 1, backgroundColor: PAGE }}>{playToggle}{settingsToggle}</div> : null}
           <div key={`card${card}-${beat}`} style={{ display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
         </div>
 
@@ -1008,27 +1036,10 @@ export default function App() {
           </>) : (<>
             {/* Explore: one control says how the dots are labelled: note names, or intervals counted from the rootless C9, the Eø or the Gm6 (the same four notes, three names). */}
             <div id="nine-labels" aria-label="Label the dots" style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }}>
-              {tabsBtn("Label the dots", [{ value: "notes", label: "Notes" }, { value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], show === "notes" ? "notes" : frame, (v: string) => { if (v === "notes") { setShow("notes"); setFrame("0"); } else { setShow("intervals"); setFrame(v); } }, [10, 8, 8, 9])}
+              {tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], show === "notes" ? "notes" : frame, (v: string) => { if (v === "notes") { setShow("notes"); setFrame("0"); } else { setShow("intervals"); setFrame(v); } }, [1, 1, 1, 1], undefined, false, 12.5)}
             </div>
-            <button type="button" className="nine-icon" id="nine-play" aria-label={playing ? "Stop" : "Play what is shown"} aria-pressed={playing} {...tipOn("play")} onClick={playShown} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
-              <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
-                {playing ? <rect x={4.5} y={4.5} width={9} height={9} rx={1.5} strokeWidth={1.4} style={{ fill: INK, stroke: INK }} /> : <path d="M5 3.2 L14.4 9 L5 14.8 Z" strokeWidth={1.4} strokeLinejoin="round" style={{ fill: PAGE, stroke: INK }} />}
-              </svg>
-            </button>
           </>)}
-            <button type="button" className="nine-icon nine-quiet" aria-label="Display settings" aria-controls="nine-settings" aria-expanded={open} {...tipOn("settings")} onClick={() => setOpen(!open)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 3, height: 32, minWidth: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", outlineOffset: 2, cursor: "pointer", color: INK, backgroundColor: PAGE }}>
-              <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
-                {[[4, 6], [9, 12], [14, 8]].map((yx: number[]) => (
-                  <g key={yx[0]}>
-                    <line x1={2} x2={16} y1={yx[0]} y2={yx[0]} strokeWidth={1.4} strokeLinecap="round" style={{ stroke: INK }} />
-                    <circle cx={yx[1]} cy={yx[0]} r={2.1} strokeWidth={1.4} style={{ fill: PAGE, stroke: INK }} />
-                  </g>
-                ))}
-              </svg>
-              <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true" style={{ display: "block", transform: open ? "rotate(180deg)" : "none", transition: `transform 200ms ${EASE}` }}>
-                <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
-              </svg>
-            </button>
+            {guided ? settingsToggle : null}
         </div>
 
         {/* Inline settings: expands in the flow above the board and stays open across cards until toggled. */}
@@ -1062,21 +1073,25 @@ export default function App() {
         {guided ? (
         <button type="button" className="nine-btn nine-q" id="nine-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), width: "100%", height: 36 }}>{playing ? "\u25a0 Stop" : "\u25b6 Hear it"}</button>
         ) : (
-        <div className="nine-q" id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", height: 36, minWidth: 0, borderBottom: `1px solid ${LINE}`, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
-          {[0, 1, 2, 3, 4].map((p: number) => (
-            <button key={p} type="button" className="nine-shbtn" role="radio" aria-checked={cur.p === p} aria-label={`Shape ${p + 1}: ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? ". Tap again to move it an octave." : ""}`} {...tipOn(`shape${p}`)} onClick={() => pickShape(p)} style={{ position: "relative", height: "100%", minWidth: 0, padding: 0, border: 0, borderRadius: 0, boxShadow: cur.p === p ? `inset 0 -2px 0 ${INK}` : "none", cursor: "pointer", fontFamily: SANS, fontWeight: cur.p === p ? 700 : 400, color: cur.p === p ? INK : INK2, backgroundColor: PAGE, transition: "color 200ms ease, box-shadow 200ms ease" }}>
-              <span className="cap">Shape</span><span className="num">{p + 1}</span>{cur.p === p && canOctave ? <span aria-hidden="true" title="Tap again to move this shape an octave" style={{ position: "absolute", right: 4, top: 2, fontSize: 10, lineHeight: "12px", opacity: 0.75 }}>{"\u2195"}</span> : null}
+        <div className="nine-q" id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: [0, 1, 2, 3, 4].map((p: number) => `minmax(0, 1fr)`).join(" "), height: 36, minWidth: 0, borderBottom: `1px solid ${LINE}`, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
+          {[0, 1, 2, 3, 4].map((p: number) => {
+            const inner = (
+              <button key={`sh${p}`} type="button" className="nine-shbtn" role="radio" aria-checked={cur.p === p} aria-label={`Shape ${p + 1}: ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? ". Tap again to move it an octave." : ""}`} {...tipOn(`shape${p}`)} onClick={() => pickShape(p)} style={{ width: "100%", padding: 0, position: "relative", height: "100%", minWidth: 0, border: 0, borderRadius: 0, boxShadow: cur.p === p ? `inset 0 -2px 0 ${INK}` : "none", cursor: "pointer", fontFamily: SANS, fontWeight: cur.p === p ? 700 : 400, color: cur.p === p ? INK : INK2, backgroundColor: PAGE, transition: "color 200ms ease, box-shadow 200ms ease" }}>
+              <span className="cap">Shape</span><span className="num">{p + 1}</span>
             </button>
-          ))}
+            );
+            return inner;
+          })}
         </div>
         )}
         {!guided ? (
-          <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 46, padding: "0 36px", backgroundColor: PAGE, textAlign: "center" }}>
-            <div style={{ minWidth: 0, backgroundColor: PAGE }}>
+          <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
+            {/* Equal air above the name and between it and the first dot: the board has its own 9px of padding, so the block starts 9px down; a lone name sits 9px lower in the block so the board never moves. */}
+            <div style={{ minWidth: 0, marginTop: exSub ? 0 : 9, backgroundColor: PAGE }}>
               <div id="nine-name-title" style={{ fontFamily: SANS, fontSize: 24, fontWeight: 700, lineHeight: "28px", letterSpacing: "-0.3px", color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{exTitle}</div>
               {exSub ? <div id="nine-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{exSub}</div> : null}
             </div>
-            <button type="button" className="nine-icon" id="nine-share-quick" aria-label="Share this diagram as an image" onClick={() => { void sharePng(); }} style={{ position: "absolute", right: 0, top: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+            <button type="button" className="nine-icon" id="nine-share-quick" aria-label="Share this diagram as an image" onClick={() => { void sharePng(); }} style={{ position: "absolute", right: 0, top: exSub ? 9 : 18, display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
                 <path d="M9 11.5 V2.5 M5.8 5.5 L9 2.3 L12.2 5.5 M3.5 9 V14.5 H14.5 V9" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
               </svg>
@@ -1097,6 +1112,18 @@ export default function App() {
             );
           })}
         </div>
+        {/* Explore: the same shape one octave down or up, under the board's left and right arrows. The row keeps its height so nothing jumps. */}
+        {!guided ? (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 28, marginTop: -6, backgroundColor: PAGE, visibility: canOctave ? "visible" : "hidden" }}>
+            {(lefty ? [1, -1] : [-1, 1]).map((d: number) => {
+              const lo = seq[shapeIdx].lo;
+              const ok = d < 0 ? copies.some((i: number) => seq[i].lo < lo) : copies.some((i: number) => seq[i].lo > lo);
+              return (
+                <button key={`oct${d}`} type="button" className="nine-oct" aria-label={d < 0 ? "Down an octave" : "Up an octave"} disabled={!ok} onClick={() => octaveShape(d)} title={d < 0 ? "Down an octave" : "Up an octave"} style={{ width: 36, height: 28, padding: 0, [(lefty ? d > 0 : d < 0) ? "marginLeft" : "marginRight"]: -8, border: 0, borderRadius: 8, boxShadow: "none", cursor: ok ? "pointer" : "default", fontFamily: SANS, fontSize: 22, fontWeight: 300, lineHeight: "28px", color: INK, opacity: ok ? 1 : 0.22, transition: "opacity 200ms ease", backgroundColor: PAGE }}>{d < 0 ? "\u2212" : "+"}</button>
+              );
+            })}
+          </div>
+        ) : null}
         {guided ? (
         <div id="nine-name" aria-live="polite" style={{ height: 28, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SANS, fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px", color: INK, backgroundColor: PAGE }}>{caption}</div>
         ) : null}
@@ -1122,7 +1149,7 @@ export default function App() {
           </div>
         );
       })() : null}
-      {tut ? <Tutorial steps={TUT_STEPS} onStep={(st: TutStep) => { const at = st.at ?? [0, 0]; go(at[0], at[1]); setOpen(st.settings === true); }} onClose={endTutorial} /> : null}
+      {tut ? <Tutorial steps={TUT_STEPS} onStep={(st: TutStep): boolean => { const at = st.at ?? [0, 0]; const wantOpen = st.settings === true; const moved = at[0] !== cardRef.current || at[1] !== beatRef.current || wantOpen !== openRef.current; go(at[0], at[1]); setOpen(wantOpen); return moved; }} onClose={endTutorial} /> : null}
     </div>
   );
 }

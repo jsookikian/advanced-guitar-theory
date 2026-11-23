@@ -40,9 +40,9 @@ const res=await pg.evaluate(async()=>{
   }
   const toggles = c===6 ? [[null,'Drop 2'],[null,'Drop 3']] : c===7 ? ['Arpeggio','Pentatonic','Mixolydian','Drop 2','Drop 3'].map(l=>[null,l]) : [[null,null]];
   for(const [em,tg] of toggles){ if(em){click('.nine-card button',em);await S(30);} if(tg) {click('.nine-card button',tg);await S(30);}
-   for(const shp of (c<=3?[null]:['1','2','3','4','5'])){ if(shp){btns('[aria-label="Shape"] button')[+shp-1].click(); await S(30);}
+   for(const shp of (c<=3?[null]:['1','2','3','4','5'])){ if(shp){btns('[aria-label="Shape"] [role=radio]')[+shp-1].click(); await S(30);}
    for(const mode of ['Intervals','Notes']){
-    for(const [fl,fr] of (mode==='Notes'?[['Notes',0]]:FR)){
+    for(const [fl,fr] of (mode==='Notes'?[['Note Names',0]]:FR)){
      click('#nine-labels button',fl);
      await S(40);
      const quiz=false;

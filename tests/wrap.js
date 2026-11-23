@@ -26,13 +26,13 @@ for(const key of (process.env.KEYS||'C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B').split(',')){
  for(const how of ['tap']){
   for(let sh=1;sh<=5;sh++){
    const L=list.filter(q=>q.p===sh);if(L.length<2)continue;
-   await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);await S(200);
+   await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] [role=radio]')][n-1].click(),sh);await S(200);
    let c=await st();
    // go to this shape's lowest copy first
    for(let g=0;g<4&&c.lo!==L[0].lo;g++){await pg.evaluate(()=>document.querySelector('#nine-shape [aria-checked=true]').click());await S(120);c=await st();}
    for(let i=1;i<=L.length;i++){
     const before=c;
-    await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);
+    await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] [role=radio]')][n-1].click(),sh);
     await S(160);c=await st();
     const want=how==='down'?L[(L.length-i)%L.length]:L[i%L.length];
     if(c.p!==sh||c.lo!==want.lo)F(key+' '+how+' shape '+sh+' step '+i+' went to '+c.txt+' wanted '+want.lo);
@@ -40,7 +40,7 @@ for(const key of (process.env.KEYS||'C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B').split(',')){
    }
   }
  }
- await pg.evaluate(()=>[...document.querySelectorAll('[aria-label="Shape"] button')][0].click());await S(200);
+ await pg.evaluate(()=>[...document.querySelectorAll('[aria-label="Shape"] [role=radio]')][0].click());await S(200);
  // checks
  const pc={C:0,Db:1,D:2,Eb:3,E:4,F:5,Gb:6,'F#':6,G:7,Ab:8,A:9,Bb:10,B:11}[key];
  list.forEach((q,i)=>{ if(q.lo<0||q.hi>24)F(key+' range '+q.txt); if(i&&q.lo<list[i-1].lo)F(key+' order');
