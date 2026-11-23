@@ -802,7 +802,8 @@ export default function App() {
   // The bold chord name under the board.
   // Explore's name block above the board: the chord (or voicing) in big bold type; a Drop voicing adds its name underneath.
   const nameEff = show === "notes" ? 0 : eff;
-  const frameName = nameEff === 0 ? `${I}9 Rootless` : nameEff === 4 ? `${III}\u00f8` : `${V}m6`;
+  // "Rootless" only where the root is really left out (the arpeggio and the Drop voicings); the pentatonic and Mixolydian layers include it.
+  const frameName = nameEff === 0 ? (mode === "penta" || mode === "mixo" ? `${I}9` : `${I}9 Rootless`) : nameEff === 4 ? `${III}\u00f8` : `${V}m6`;
   const exTitle = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : frameName;
   // Only a Drop 2 / Drop 3 voicing gets a second line; every other layer is just the chord, like a chord diagram.
   const exSub = mode === "grip" || mode === "drop3" ? LAYER_NAME[mode] : "";
