@@ -360,6 +360,22 @@ function Seg(props: { options: { value: string; label: string }[]; value: string
   );
 }
 
+// Quiet tabs for Explore's pickers: no boxes, no fills; the chosen one is dark, bold and underlined, the rest are grey text on a hairline.
+function Tabs(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; weights?: number[]; className?: string; label: string }) {
+  const { options, value, onChange } = props;
+  const w = props.weights && props.weights.length === options.length ? props.weights : options.map(() => 1);
+  return (
+    <div role="radiogroup" aria-label={props.label} className={props.className} style={{ display: "grid", gridTemplateColumns: w.map((x: number) => `minmax(0, ${x}fr)`).join(" "), height: 34, borderBottom: `1px solid ${LINE}`, backgroundColor: PAGE, boxSizing: "border-box" }}>
+      {options.map((o: { value: string; label: string }) => {
+        const on = o.value === value;
+        return (
+          <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.value)} style={{ minWidth: 0, padding: 0, border: 0, borderRadius: 0, cursor: "pointer", fontFamily: SANS, fontSize: 13.5, fontWeight: on ? 700 : 400, lineHeight: "20px", whiteSpace: "nowrap", color: on ? INK : INK2, backgroundColor: PAGE, boxShadow: on ? `inset 0 -2px 0 ${INK}` : "none", transition: "color 200ms ease, box-shadow 200ms ease" }}>{o.label}</button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Field(props: { label: string; children: ReactNode; style?: CSSProperties }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, backgroundColor: PAGE, color: INK, ...props.style }}>
@@ -378,7 +394,6 @@ function Check(props: { on: boolean; label: string; onClick: () => void }) {
   );
 }
 
-type KeyKind = "root" | "teal" | "dash" | "fill";
 
 // Canvas text wrap for the share image; returns the last baseline used.
 function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lh: number): number {
@@ -463,13 +478,14 @@ const TUT_STEPS: TutStep[] = [
   { at: [0, 0], live: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board. Tap one to spotlight that note on the board and hear it." },
   { at: [0, 0], live: true, sel: "#nine-hear", title: "Hear it", text: "Plays what is lit on the board, so you hear exactly what the sentence is about." },
   { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals ([R] [3] [5] [b7]) and note names ([C] [E] [G] [Bb]). The root is always red." },
-  { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#nine-settings", title: "Settings", text: "Count from, Key, Left-handed, Sound, Neck and Share image live here. Count from changes which note the intervals are measured from." },
+  { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#nine-settings", title: "Settings", text: "Key, Left-handed, Sound, Neck, Show tutorial and Share image live here." },
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "The lesson has eight steps. Tap any one to jump straight to it." },
   { at: [0, 0], sel: "#nine-name + div", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
   { at: [2, 2], sel: ".nine-card p button[aria-pressed]", title: "Chord names are buttons", text: "A chord name with a dotted underline is a button. Tap it to count the board's intervals from that chord, and tap it again to go back." },
-  { at: [7, 0], live: true, sel: "#nine-shape", title: "Explore: the five shapes", text: "The last step opens the whole neck. Pick one of the five pentatonic shapes." },
+  { at: [7, 0], live: true, sel: "#nine-shape", title: "Explore: the five shapes", text: "The last step opens the whole neck. Pick one of the five shapes. Tap the selected one again (it shows \u2195) to move it an octave." },
   { at: [7, 0], live: true, sel: "#nine-board", title: "Walk the neck", text: "Swipe or scroll the neck, or use the arrows at its edges, to move up and down the shapes." },
-  { at: [7, 0], live: true, sel: "#nine-octave", title: "Octave", text: "Move the current shape up or down an octave. Tapping the selected shape does the same." },
+  { at: [7, 0], live: true, sel: "#nine-labels", title: "Label the dots", text: "Notes shows note names. The other three count intervals from a chord: the rootless C9, E\u00f8 or Gm6. Same notes, three names." },
+  { at: [7, 0], live: true, sel: "#nine-name", title: "What you are looking at", text: "The chord or voicing on the board, with its layer underneath. The arrow at the right shares the diagram as an image." },
   { at: [7, 0], live: true, sel: "#nine-play", title: "Play", text: "Plays the notes of the shape from low to high. Tap again to stop." },
 ];
 
@@ -515,12 +531,13 @@ export default function App() {
     const t = Math.max(0, Math.min(total - 1, i));
     setCard((c: number) => { setDir(t >= c ? 1 : -1); return t; });
     setBeat(b);
+    setFrame("0"); // the count-from lens belongs to the screen it was chosen on
   };
   const cardRef = useRef<number>(0);
   cardRef.current = card;
   const frameRef = useRef<string>("0");
   frameRef.current = frame;
-  const navRef = useRef<{ next: () => void; prev: () => void }>({ next: () => {}, prev: () => {} });
+  const navRef = useRef<{ next: () => void; prev: () => void; key: (d: number) => void }>({ next: () => {}, prev: () => {}, key: () => {} });
   const startTutorial = (): void => { tutFrom.current = { card: cardRef.current, beat }; setOpen(false); setTut(true); };
   const endTutorial = (): void => {
     setTut(false);
@@ -541,8 +558,8 @@ export default function App() {
     const onKey = (e: globalThis.KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.getAttribute("role") === "radio" || t.getAttribute("role") === "checkbox")) return;
-      if (e.key === "ArrowRight") navRef.current.next();
-      if (e.key === "ArrowLeft") navRef.current.prev();
+      if (e.key === "ArrowRight") navRef.current.key(1);
+      if (e.key === "ArrowLeft") navRef.current.key(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -661,10 +678,9 @@ export default function App() {
   };
   const shapeLabel = (q: Pos): string => `Shape ${q.p + 1}`;
 
-  // The same position is a different CAGED shape depending on the root you count from.
-  const cg = (deg: number): string => CAGED[deg][cur.p];
-  const layerSeg = () => segBtn([{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7], "nine-layers");
+  const layerSeg = () => tabsBtn("Layer", [{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7], "nine-layers");
 
+  const tabsBtn = (label: string, o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Tabs label={label} options={o} value={v} onChange={on} weights={weights} className={className} />;
   const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Seg options={o} value={v} onChange={on} weights={weights} className={className} />;
   const ink = spot !== null ? "rgba(77,53,51,0.2)" : INK;
   const head = (t: string, extra?: string) => (
@@ -705,23 +721,20 @@ export default function App() {
   const Syn = (props: { d: number; children: ReactNode }): ReactNode => {
     const on = frame === String(props.d);
     return (
-      <button type="button" aria-pressed={on} aria-label={`Show the intervals from ${n(props.d)}`} onClick={() => setFrame(on && props.d !== 0 ? "0" : String(props.d))} style={{ display: "inline", padding: "0 3px", margin: 0, border: 0, borderRadius: 6, boxShadow: "none", cursor: "pointer", font: "inherit", fontWeight: 700, color: ink, backgroundColor: on ? LINE : PAGE, textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{props.children}</button>
+      <button type="button" aria-pressed={on} aria-label={`Show the intervals from ${n(props.d)}`} onClick={() => { setShow("intervals"); setFrame(on && props.d !== 0 ? "0" : String(props.d)); }} style={{ display: "inline", padding: "0 3px", margin: 0, border: 0, borderRadius: 6, boxShadow: "none", cursor: "pointer", font: "inherit", fontWeight: 700, color: ink, backgroundColor: on ? "#e3d8d6" : PAGE, textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{props.children}</button>
     );
   };
   const chips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`cs${d}`}>{i > 0 ? " " : ""}{chip(d)}</span>);
 
-  // The CAGED shape names (A shape, D shape...) are shape names, not notes, so they stay bold text; the notes the shapes are counted from are circles.
-  const cagedLine: ReactNode = (
-    <>Shape {cur.p + 1}: the <B>{cg(0)} shape</B> from {chip(0)}, the <B>{cg(4)} shape</B> from {chip(4)} (<Syn d={4}>{III}{"\u00f8"}</Syn>), the <B>{cg(7)} shape</B> from {chip(7)} (<Syn d={7}>{V}m6</Syn>).</>
-  );
   const next = (): void => {
-    if (beat < nBeats - 1) { setDir(1); setBeat(beat + 1); } else go(card === total - 1 ? 0 : card + 1);
+    if (beat < nBeats - 1) { setDir(1); setBeat(beat + 1); setFrame("0"); } else go(card === total - 1 ? 0 : card + 1);
   };
   const prev = (): void => {
-    if (beat > 0) { setDir(-1); setBeat(beat - 1); return; }
+    if (beat > 0) { setDir(-1); setBeat(beat - 1); setFrame("0"); return; }
     if (card > 0) { const pk = CARDS[card - 1].kind; go(card - 1, GUIDED.has(pk) ? BEAT_SPEC[pk].length - 1 : 0); }
   };
-  navRef.current = { next, prev };
+  // Arrow keys walk the beats and steps; on Explore (the last step) they walk the shapes instead of restarting the lesson.
+  navRef.current = { next, prev, key: (d: number) => { if (onExplore) stepShape(lefty ? -d : d); else if (d > 0) next(); else prev(); } };
   // The script: for every guided step a heading, and per beat one sentence and the bold chord name shown under the board.
   const beatContent = (kind: string): { head: string; beats: { text: ReactNode; name: string }[] } => {
     const dr = (set: Set<string>, label: string): string => `${vname(set)} \u00b7 ${label}`;
@@ -776,77 +789,30 @@ export default function App() {
   let body: ReactNode = null;
   if (content && cb) body = <>{beatDots}{head(content.head)}{line(cb.text)}</>;
   else body = (
-    <>{head("Explore the neck.")}{line(cagedLine)}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
+    <>{head("Explore the neck.")}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
   );
-
-  // (The on-screen legend is gone; this list only feeds the share image.)
-  const legendSpec: { kind: KeyKind; text: string }[] = [];
-  if (shown.some((d: Dot) => d.d === ringDeg)) legendSpec.push({ kind: "root", text: `root ${n(ringDeg)}` });
-  if (mode === "chord") legendSpec.push({ kind: "fill", text: "chord tones" });
-  if (mode === "arp" || mode === "penta" || mode === "mixo") legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 ${n(2)}` : `${n(2)}, the 9 of ${I}` });
-  if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `[4] and [6] ${n(5)} ${n(9)}` : `${n(5)} ${n(9)}, the [4] and [6] of ${I}` });
-  if (mode === "grip") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 2" : `Drop 2 \u00b7 ${vname(cur.drop)}` });
-  if (mode === "drop3") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 3" : `Drop 3 \u00b7 ${vname(cur.drop3)}` });
-  if (guided && C.kind !== "names") {
-    legendSpec.length = 0;
-    if (C.kind === "c7") { legendSpec.push({ kind: "root", text: `root ${n(ringDeg)}` }, { kind: "fill", text: "chord tones" }); }
-    else if (C.kind === "lose") legendSpec.push({ kind: "fill", text: `kept: ${III} ${V} ${n(10)}` });
-    else legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 ${n(2)}` : `${n(2)}, the 9 of ${I}` }, { kind: "fill", text: `${III} ${V} ${n(10)}` });
-  }
 
   // Share: draw the current diagram onto a 1080x1080 paper-white PNG, then hand it to the share sheet (or download it).
   const LAYER_NAME: Record<Mode, string> = { chord: "Chord tones", arp: "Arpeggio", penta: "Pentatonic", mixo: "Mixolydian", grip: "Drop 2", drop3: "Drop 3" };
   const voicing = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : "";
   // The bold chord name under the board.
+  // Explore's name block above the board: the chord (or voicing) in big bold type, the layer under it.
+  const nameEff = show === "notes" ? 0 : eff;
+  const frameName = nameEff === 0 ? `${I}9 Rootless` : nameEff === 4 ? `${III}\u00f8` : `${V}m6`;
+  const exTitle = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : frameName;
+  const exSub = (mode === "penta" ? `${I} dominant pentatonic` : mode === "mixo" ? `${I} Mixolydian` : LAYER_NAME[mode]) + (show === "notes" ? " \u00b7 note names" : "");
   const caption = cb ? cb.name : `${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
   const frameBase = eff === 0 ? `${I}9` : eff === 4 ? `${III}\u00f8` : `${V}m6`;
-  const shareHead = `${shapeLabel(cur)}: ${CAGED[eff][cur.p]} shape from ${n(eff)} \u00b7 ${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
-  const shareMeta = `Key of ${keyId} \u00b7 ${intervals ? `Intervals from ${frameBase}` : "Note names"}`;
   const shareName = `${frameBase}-shape${cur.p + 1}-fret${cur.lo}-${LAYER_NAME[mode]}`.toLowerCase().replace(/\u00f8/g, "o").replace(/#/g, "sharp").replace(/[^a-z0-9-]/g, "") + ".png";
+  // Share: a plain paper-white PNG with only the bold chord name and the diagram, handed to the native share sheet (or downloaded
+  // where the browser has none).
   const sharePng = async (): Promise<void> => {
     const svg = document.getElementById("nine-board") as SVGSVGElement | null;
     if (!svg) return;
     try { await document.fonts.ready; } catch { /* draw with fallbacks */ }
-    const S = 1080;
+    const W = 1080;
     const M = 80;
-    const cv = document.createElement("canvas");
-    cv.width = S;
-    cv.height = S;
-    const ctx = cv.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = PAGE;
-    ctx.fillRect(0, 0, S, S);
-    let y = M + 44;
-    ctx.fillStyle = INK;
-    ctx.font = `400 40px ${SERIF}`;
-    y = wrapText(ctx, "Dominant Pentatonics and Half Diminished Chords", M, y, S - 2 * M, 50);
-    ctx.fillStyle = INK2;
-    ctx.font = `400 26px ${SANS}`;
-    y += 46;
-    ctx.fillText(shareMeta, M, y);
-    ctx.fillStyle = INK;
-    ctx.font = `400 40px ${SERIF}`;
-    y = wrapText(ctx, shareHead, M, y + 72, S - 2 * M, 50);
-    // Legend, drawn with the page's dot styles.
-    ctx.font = `400 26px ${SANS}`;
-    let x = M;
-    y += 58;
-    legendSpec.forEach((it: { kind: KeyKind; text: string }) => {
-      const label = it.text.replace(/[\[\]]/g, "");
-      const w = 30 + ctx.measureText(label).width;
-      if (x > M && x + w > S - M) { x = M; y += 40; }
-      ctx.beginPath();
-      ctx.arc(x + 11, y - 9, 11, 0, Math.PI * 2);
-      ctx.setLineDash(it.kind === "dash" ? [4, 3] : []);
-      ctx.fillStyle = it.kind === "root" ? RED : it.kind === "teal" ? TEAL : it.kind === "fill" ? INK : PAGE;
-      ctx.fill();
-      if (it.kind === "dash") { ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); }
-      ctx.setLineDash([]);
-      if (it.kind === "root") { ctx.fillStyle = "#ffffff"; ctx.font = `700 14px ${SANS}`; ctx.textAlign = "center"; ctx.fillText("R", x + 11, y - 4); ctx.textAlign = "left"; ctx.font = `400 26px ${SANS}`; }
-      ctx.fillStyle = INK2;
-      ctx.fillText(label, x + 30, y);
-      x += w + 36;
-    });
+    const shareTitle = guided ? caption : exTitle;
     // The board: a static copy of the live SVG at its final state (no fades, no animations).
     const clone = svg.cloneNode(true) as SVGSVGElement;
     const vb = svg.viewBox.baseVal;
@@ -878,7 +844,7 @@ export default function App() {
     }
     // Notes that are only faded on screen (the ghosts around a Drop chord) are left out of the image.
     clone.querySelectorAll('g[data-vis="1"]').forEach((g: Element) => { const c = g.querySelector("circle"); if (c && parseFloat((c as SVGElement).style.opacity || "1") < 0.5) g.remove(); });
-    const bw = S - 2 * M;
+    const bw = W - 2 * M;
     const bh = (bw * vb.height) / vbw;
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("width", String(bw));
@@ -893,19 +859,30 @@ export default function App() {
     const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml;charset=utf-8" }));
     const img = new Image();
     await new Promise<void>((res: () => void, rej: (e: unknown) => void) => { img.onload = () => res(); img.onerror = (e: unknown) => rej(e); img.src = url; });
-    const top = y + 40;
-    const by = top + Math.max(0, (S - M - top - bh) / 2);
-    ctx.drawImage(img, M, by, bw, bh);
+    const TITLE_H = 120;
+    const H = M + TITLE_H + bh + M;
+    const cv = document.createElement("canvas");
+    cv.width = W;
+    cv.height = H;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = PAGE;
+    ctx.fillRect(0, 0, W, H);
+    // The name: bold, centred, as large as fits on one line.
+    let fs = 88;
+    ctx.font = `700 ${fs}px ${SANS}`;
+    while (fs > 40 && ctx.measureText(shareTitle).width > W - 2 * M) { fs -= 4; ctx.font = `700 ${fs}px ${SANS}`; }
+    ctx.fillStyle = INK;
+    ctx.textAlign = "center";
+    ctx.fillText(shareTitle, W / 2, M + 84);
+    ctx.drawImage(img, M, M + TITLE_H, bw, bh);
     URL.revokeObjectURL(url);
-    ctx.fillStyle = INK2;
-    ctx.font = `400 24px ${SANS}`;
-    ctx.fillText("Advanced Guitar Theory", M, S - 36);
     const blob = await new Promise<Blob | null>((res: (b: Blob | null) => void) => cv.toBlob(res, "image/png"));
     if (!blob) return;
     const file = new File([blob], shareName, { type: "image/png" });
     const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
-    if (window.matchMedia("(pointer: coarse)").matches && nav.canShare && nav.share && nav.canShare({ files: [file] })) {
-      try { await nav.share({ files: [file], title: shareHead }); return; } catch (e) { if ((e as Error).name === "AbortError") return; }
+    if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
+      try { await nav.share({ files: [file], title: shareTitle }); return; } catch (e) { if ((e as Error).name === "AbortError") return; }
     }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -961,7 +938,7 @@ export default function App() {
     + " #nine-root .nine-seg button::after{content:'';position:absolute;inset:0;background:#4d3533;opacity:0;transition:opacity 150ms ease;pointer-events:none}"
     + " #nine-root .nine-seg button[aria-checked=false]:hover::after{opacity:.07}"
     + " #nine-root .nine-btn:hover:not(:disabled){filter:brightness(.96)} #nine-root .nine-btn-primary:hover:not(:disabled){filter:brightness(1.15)}"
-    + " #nine-root .nine-card{height:100px} #nine-root .nine-card.nine-tall{height:124px} @media (max-width:600px){#nine-root .nine-card{height:118px} #nine-root .nine-card.nine-tall{height:118px}}"
+    + " #nine-root .nine-card{height:100px} #nine-root .nine-card.nine-tall{height:68px} @media (max-width:600px){#nine-root .nine-card{height:118px} #nine-root .nine-card.nine-tall{height:68px}}"
     + " @media (max-width:380px){#nine-root .nine-layers button{font-size:11.5px!important;padding:0 1px!important}}"
     + " #nine-root .nine-long{display:none} @media (min-width:560px){#nine-root .nine-short{display:none} #nine-root .nine-long{display:inline}}"
     + " @media (max-width:380px){#nine-root .nine-step span:last-child{font-size:10px!important}}"
@@ -1020,24 +997,24 @@ export default function App() {
         </div>
 
         <div className="nine-q" style={{ minHeight: 34, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
+          {guided ? (<>
           <div style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }} />
             <div role="radiogroup" id="nine-show" aria-label="Show intervals or note names" className="nine-q" style={{ display: "inline-flex", flex: "0 0 auto", height: 24, border: `1px solid ${LINE_UI}`, borderRadius: 12, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
               {[["intervals", "Intervals"], ["notes", "Notes"]].map(([v, lb]: string[]) => (
                 <button key={v} type="button" role="radio" aria-checked={show === v} onClick={() => setShow(v)} style={{ height: "100%", padding: "0 8px", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "22px", color: show === v ? PAGE : INK, backgroundColor: show === v ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease" }}>{lb}</button>
               ))}
             </div>
-            {!guided ? (<>
-            <div role="group" id="nine-octave" aria-label="Move this shape by an octave" className="nine-q" style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto", height: 24, border: `1px solid ${LINE_UI}`, borderRadius: 12, overflow: "hidden", boxSizing: "border-box", opacity: canOctave ? 1 : 0.35, backgroundColor: PAGE }}>
-              <button type="button" id="nine-octave-down" aria-label="Octave down" {...tipOn("octave-down")} disabled={!canOctave} onClick={() => octaveShape(-1)} style={{ height: "100%", width: 22, padding: 0, border: 0, borderRadius: 0, boxShadow: "none", cursor: canOctave ? "pointer" : "default", fontFamily: SANS, fontSize: 14, fontWeight: 600, lineHeight: "20px", color: INK, backgroundColor: PAGE }}>{"\u2212"}</button>
-              <span style={{ padding: "0 1px", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "22px", color: INK, backgroundColor: PAGE }}>Octave</span>
-              <button type="button" id="nine-octave-up" aria-label="Octave up" {...tipOn("octave-up")} disabled={!canOctave} onClick={() => octaveShape(1)} style={{ height: "100%", width: 22, padding: 0, border: 0, borderRadius: 0, boxShadow: "none", cursor: canOctave ? "pointer" : "default", fontFamily: SANS, fontSize: 14, fontWeight: 600, lineHeight: "20px", color: INK, backgroundColor: PAGE }}>+</button>
+          </>) : (<>
+            {/* Explore: one control says how the dots are labelled: note names, or intervals counted from the rootless C9, the Eø or the Gm6 (the same four notes, three names). */}
+            <div id="nine-labels" aria-label="Label the dots" style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }}>
+              {tabsBtn("Label the dots", [{ value: "notes", label: "Notes" }, { value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], show === "notes" ? "notes" : frame, (v: string) => { if (v === "notes") { setShow("notes"); setFrame("0"); } else { setShow("intervals"); setFrame(v); } }, [10, 8, 8, 9])}
             </div>
             <button type="button" className="nine-icon" id="nine-play" aria-label={playing ? "Stop" : "Play what is shown"} aria-pressed={playing} {...tipOn("play")} onClick={playShown} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
                 {playing ? <rect x={4.5} y={4.5} width={9} height={9} rx={1.5} strokeWidth={1.4} style={{ fill: INK, stroke: INK }} /> : <path d="M5 3.2 L14.4 9 L5 14.8 Z" strokeWidth={1.4} strokeLinejoin="round" style={{ fill: PAGE, stroke: INK }} />}
               </svg>
             </button>
-            </>) : null}
+          </>)}
             <button type="button" className="nine-icon nine-quiet" aria-label="Display settings" aria-controls="nine-settings" aria-expanded={open} {...tipOn("settings")} onClick={() => setOpen(!open)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 3, height: 32, minWidth: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", outlineOffset: 2, cursor: "pointer", color: INK, backgroundColor: PAGE }}>
               <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
                 {[[4, 6], [9, 12], [14, 8]].map((yx: number[]) => (
@@ -1057,9 +1034,6 @@ export default function App() {
         <div id="nine-settings" aria-hidden={!open} style={{ display: "grid", gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0, marginTop: open ? 0 : -8, visibility: open ? "visible" : "hidden", transition: `grid-template-rows 280ms ${EASE}, margin-top 280ms ${EASE}, opacity 220ms ease, visibility 0s linear ${open ? 0 : 280}ms`, backgroundColor: PAGE }}>
           <div style={{ minHeight: 0, overflow: "hidden", backgroundColor: PAGE }}>
               <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, backgroundColor: PAGE, color: INK, border: `1px solid ${LINE}`, borderRadius: 12 }}>
-                <Field label="Count from" style={{ opacity: show === "intervals" ? 1 : 0.35, pointerEvents: show === "intervals" ? "auto" : "none", transition: "opacity 200ms ease" }}>
-                  <Seg options={[{ value: "0", label: `${I}9` }, { value: "4", label: `${III}ø` }, { value: "7", label: `${V}m6` }]} value={frame} onChange={(v: string) => setFrame(v)} />
-                </Field>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 16, alignItems: "center", backgroundColor: PAGE }}>
                   <Field label="" style={{ gap: 0 }}>
                     <select value={keyId} onChange={(e: ChangeEvent<HTMLSelectElement>) => { const nk = KEYS.find((x: KeyDef) => x.id === e.target.value) ?? KEYS[0]; const list = instances(nk); let best = homeIndex(list); list.forEach((q: Pos, i: number) => { if (q.p === cur.p && (list[best].p !== cur.p || Math.abs(q.lo - cur.lo) < Math.abs(list[best].lo - cur.lo))) best = i; }); setInst(best); setKeyId(e.target.value); }} style={{ height: CH, width: "100%", boxSizing: "border-box", fontFamily: SANS, fontSize: CFS, fontWeight: 500, color: INK, backgroundColor: PAGE, border: BORDER, borderRadius: RAD, padding: "0 26px 0 12px", lineHeight: "18px", colorScheme: "only light", cursor: "pointer", backgroundImage: "linear-gradient(45deg, transparent 50%, #4d3533 50%), linear-gradient(135deg, #4d3533 50%, transparent 50%)", backgroundPosition: "calc(100% - 15px) 50%, calc(100% - 10px) 50%", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat" }}>
@@ -1073,14 +1047,12 @@ export default function App() {
                     {INSTRUMENTS.map((i: { id: InstrumentId; label: string }) => <option key={i.id} value={i.id} style={{ color: INK, backgroundColor: PAGE }}>{i.label}</option>)}
                   </select>
                 </Field>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 16, alignItems: "end", backgroundColor: PAGE }}>
-                  <Field label="Neck (Explore card)" style={{ opacity: onExplore ? 1 : 0.35, pointerEvents: onExplore ? "auto" : "none", transition: "opacity 200ms ease" }}>
-                    <span id="nine-full" style={{ display: "block", backgroundColor: PAGE }}>{segBtn([{ value: "scroll", label: "Scroll" }, { value: "full", label: "Fit all" }], full ? "full" : "scroll", (v: string) => setFull(v === "full"))}</span>
-                  </Field>
-                  <div style={{ display: "flex", gap: 8, backgroundColor: PAGE }}>
-                    <button type="button" className="nine-btn" id="nine-settings-tutorial" style={btn(false, false)} onClick={startTutorial}>Show tutorial</button>
-                    <button type="button" className="nine-btn" aria-label="Share this diagram as an image" id="nine-share" style={btn(false, false)} onClick={() => { void sharePng(); }}>Share image</button>
-                  </div>
+                <Field label="Neck" style={{ opacity: onExplore ? 1 : 0.35, pointerEvents: onExplore ? "auto" : "none", transition: "opacity 200ms ease" }}>
+                  <span id="nine-full" style={{ display: "block", backgroundColor: PAGE }}>{segBtn([{ value: "scroll", label: "Scroll (Explore)" }, { value: "full", label: "Fit all" }], full ? "full" : "scroll", (v: string) => setFull(v === "full"))}</span>
+                </Field>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
+                  <button type="button" className="nine-btn" id="nine-settings-tutorial" style={btn(false, false)} onClick={startTutorial}>Show tutorial</button>
+                  <button type="button" className="nine-btn" aria-label="Share this diagram as an image" id="nine-share" style={btn(false, false)} onClick={() => { void sharePng(); }}>Share image</button>
                 </div>
               </div>
           </div>
@@ -1089,14 +1061,27 @@ export default function App() {
         {guided ? (
         <button type="button" className="nine-btn nine-q" id="nine-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), width: "100%", height: 36 }}>{playing ? "\u25a0 Stop" : "\u25b6 Hear it"}</button>
         ) : (
-        <div className="nine-q" id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", height: 36, minWidth: 0, border: `1px solid ${LINE_UI}`, borderRadius: RAD, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
+        <div className="nine-q" id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", height: 36, minWidth: 0, borderBottom: `1px solid ${LINE}`, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
           {[0, 1, 2, 3, 4].map((p: number) => (
-            <button key={p} type="button" className="nine-shbtn" role="radio" aria-checked={cur.p === p} aria-label={`Shape ${p + 1}: ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}`} {...tipOn(`shape${p}`)} onClick={() => pickShape(p)} style={{ height: "100%", minWidth: 0, padding: 0, border: 0, borderLeft: p > 0 ? `1px solid ${cur.p === p || cur.p === p - 1 ? "transparent" : LINE_UI}` : 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, color: cur.p === p ? PAGE : INK, backgroundColor: cur.p === p ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease, border-color 200ms ease" }}>
-              <span className="cap">Shape</span><span className="num">{p + 1}</span>
+            <button key={p} type="button" className="nine-shbtn" role="radio" aria-checked={cur.p === p} aria-label={`Shape ${p + 1}: ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? ". Tap again to move it an octave." : ""}`} {...tipOn(`shape${p}`)} onClick={() => pickShape(p)} style={{ position: "relative", height: "100%", minWidth: 0, padding: 0, border: 0, borderRadius: 0, boxShadow: cur.p === p ? `inset 0 -2px 0 ${INK}` : "none", cursor: "pointer", fontFamily: SANS, fontWeight: cur.p === p ? 700 : 400, color: cur.p === p ? INK : INK2, backgroundColor: PAGE, transition: "color 200ms ease, box-shadow 200ms ease" }}>
+              <span className="cap">Shape</span><span className="num">{p + 1}</span>{cur.p === p && canOctave ? <span aria-hidden="true" title="Tap again to move this shape an octave" style={{ position: "absolute", right: 4, top: 2, fontSize: 10, lineHeight: "12px", opacity: 0.75 }}>{"\u2195"}</span> : null}
             </button>
           ))}
         </div>
         )}
+        {!guided ? (
+          <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 46, padding: "0 36px", backgroundColor: PAGE, textAlign: "center" }}>
+            <div style={{ minWidth: 0, backgroundColor: PAGE }}>
+              <div id="nine-name-title" style={{ fontFamily: SANS, fontSize: 24, fontWeight: 700, lineHeight: "28px", letterSpacing: "-0.3px", color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{exTitle}</div>
+              <div id="nine-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{exSub}</div>
+            </div>
+            <button type="button" className="nine-icon" id="nine-share-quick" aria-label="Share this diagram as an image" onClick={() => { void sharePng(); }} style={{ position: "absolute", right: 0, top: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+              <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
+                <path d="M9 11.5 V2.5 M5.8 5.5 L9 2.3 L12.2 5.5 M3.5 9 V14.5 H14.5 V9" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
+              </svg>
+            </button>
+          </div>
+        ) : null}
         <div style={{ position: "relative", backgroundColor: PAGE }} onTouchStart={(e: { touches: ArrayLike<{ clientX: number; clientY: number }> }) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; }} onTouchEnd={(e: { changedTouches: ArrayLike<{ clientX: number; clientY: number }> }) => { const s = touchRef.current; touchRef.current = null; if (!s) return; const t = e.changedTouches[0]; const dx = t.clientX - s.x; const dy = t.clientY - s.y; if (!scrollOn && Math.abs(dx) > 48 && Math.abs(dy) < 36) stepShape(dx < 0 ? (lefty ? -1 : 1) : (lefty ? 1 : -1)); }}>
           <Board key={`board${jump}-${fullOn ? 1 : 0}-${scrollOn ? 1 : 0}`} full={fullOn} scroll={scrollOn} onPlay={playDot} onSettle={settleScroll} center={(cur.lo + cur.hi) / 2} band={fullOn ? [cur.lo, cur.hi] : undefined} k={k} shown={shown} wl={Math.max(0, Math.min(cur.lo - 1, MAXF - 6))} step={bt ? bt.step : MODE_STEP[mode]} dim={dimSet} spot={spot} labelOf={labelOf} ringDeg={ringDeg} lefty={lefty} drop2={mode === "drop3" ? cur.drop3 : cur.drop} />
           {(guided ? [] : [-1, 1]).map((d: number) => {
@@ -1111,7 +1096,9 @@ export default function App() {
             );
           })}
         </div>
+        {guided ? (
         <div id="nine-name" aria-live="polite" style={{ height: 28, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SANS, fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px", color: INK, backgroundColor: PAGE }}>{caption}</div>
+        ) : null}
         <div className="nine-q" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
           <button type="button" className="nine-btn" style={{ ...btn(false, card === 0 && beat === 0), height: 44, fontSize: 15 }} disabled={card === 0 && beat === 0} onClick={() => prev()}>{"\u2190 Back"}</button>
           <button type="button" className="nine-btn nine-btn-primary" style={{ ...btn(true, false), height: 44, fontSize: 15 }} onClick={() => next()}>{card === total - 1 ? "Start over" : "Continue \u2192"}</button>

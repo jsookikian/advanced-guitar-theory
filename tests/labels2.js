@@ -40,10 +40,10 @@ const res=await pg.evaluate(async()=>{
   }
   const toggles = c===6 ? [[null,'Drop 2'],[null,'Drop 3']] : c===7 ? ['Arpeggio','Pentatonic','Mixolydian','Drop 2','Drop 3'].map(l=>[null,l]) : [[null,null]];
   for(const [em,tg] of toggles){ if(em){click('.nine-card button',em);await S(30);} if(tg) {click('.nine-card button',tg);await S(30);}
-   for(const shp of (c<=3?[null]:['1','2','3','4','5'])){ if(shp){click('[aria-label="Shape"] button','Shape'+shp); await S(30);}
-   for(const mode of ['Intervals','Notes']){ click('#nine-show button',mode); await S(20);
-    for(const [fl,fr] of FR){
-     if(c===3) click('.nine-card button',fl); else click('#nine-settings button',fl);
+   for(const shp of (c<=3?[null]:['1','2','3','4','5'])){ if(shp){btns('[aria-label="Shape"] button')[+shp-1].click(); await S(30);}
+   for(const mode of ['Intervals','Notes']){
+    for(const [fl,fr] of (mode==='Notes'?[['Notes',0]]:FR)){
+     click('#nine-labels button',fl);
      await S(40);
      const quiz=false;
      if(quiz){ for(const g of document.querySelectorAll('#nine-board g[data-vis="1"]')) if(!g.querySelector('text').textContent){ g.dispatchEvent(new MouseEvent('click',{bubbles:true})); await S(8);} await S(40);}
@@ -62,8 +62,8 @@ const res=await pg.evaluate(async()=>{
      const rootShown=[...document.querySelectorAll('#nine-board g[data-vis="1"]')].some(g=>(OP[+g.dataset.s]+ +g.dataset.f)%12===r);
      legChecks++;
      if(c===6){ nameChecks++; const h2=document.querySelector('.nine-card h2').textContent; if(!new RegExp(BASE+'( no root|/[A-G]b?)?$').test(h2)) fails.push(`name card6 ${tg} ${fl}: ${h2}`);}
-     if(c===7&&!quiz&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; if(!new RegExp(tg+' · '+BASE+'( no root|/[A-G]b?)?').test(leg)) fails.push(`legend name ${tg} ${fl}: ${leg}`);}
-     const gl=[...document.querySelectorAll('#nine-settings [role=radiogroup]')][0].querySelector('[aria-checked=true]').textContent;
+     if(c===7&&mode==='Intervals'&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; const ti=document.getElementById('nine-name-title').textContent, su=document.getElementById('nine-name-sub').textContent; if(!new RegExp('^'+BASE+'( Rootless|/[A-G]b?)?$').test(ti)||su!==tg) fails.push(`name ${tg} ${fl}: ${ti} / ${su}`);}
+     const gl=document.querySelector('#nine-labels [aria-checked=true]').textContent;
      if(gl!==fl) fails.push(`global frame card${c+1} shows ${gl} want ${fl}`);
     }}}}
  }

@@ -21,6 +21,6 @@ for(let c=0;c<cards;c++){await pg.evaluate(c=>document.querySelectorAll('nav[ari
 await pg.evaluate(()=>document.querySelectorAll('nav[aria-label="Lesson steps"] button')[0].click());await S(450);
 await click('Helps to know');await S(300);fails.push(...await scan('helps to know'));
 await pg.evaluate(()=>document.getElementById('nine-tutorial').click());await S(800);
-for(let i=0;i<12;i++){fails.push(...await scan('tutorial '+(i+1)));await pg.evaluate(()=>[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='Next'||b.textContent==='Done').click());await S(700);}
+for(let i=0;i<13;i++){fails.push(...await scan('tutorial '+(i+1)));await pg.evaluate(()=>[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='Next'||b.textContent==='Done').click());await S(700);}
 console.log(fails.length?fails.join('\n'):'ok');console.log('fails',fails.length);
 await b.close();site.close();})();

@@ -23,18 +23,16 @@ for(const key of (process.env.KEYS||'C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B').split(',')){
   s=n;}
  if(!(await dis('.nine-arrow[aria-label^="Next"]')))F(key+' Next never disabled at the top');
  // Octave: tapping the selected Shape button and the 8va button both move the same shape up 12 frets, and from the highest copy back to the lowest, with a remount.
- for(const how of ['up','tap','down']){
+ for(const how of ['tap']){
   for(let sh=1;sh<=5;sh++){
    const L=list.filter(q=>q.p===sh);if(L.length<2)continue;
    await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);await S(200);
    let c=await st();
    // go to this shape's lowest copy first
-   for(let g=0;g<4&&c.lo!==L[0].lo;g++){await pg.evaluate(()=>document.getElementById('nine-octave-up').click());await S(120);c=await st();}
+   for(let g=0;g<4&&c.lo!==L[0].lo;g++){await pg.evaluate(()=>document.querySelector('#nine-shape [aria-checked=true]').click());await S(120);c=await st();}
    for(let i=1;i<=L.length;i++){
     const before=c;
-    if(how==='up')await pg.evaluate(()=>document.getElementById('nine-octave-up').click());
-    else if(how==='down')await pg.evaluate(()=>document.getElementById('nine-octave-down').click());
-    else await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);
+    await pg.evaluate(n=>[...document.querySelectorAll('[aria-label="Shape"] button')][n-1].click(),sh);
     await S(160);c=await st();
     const want=how==='down'?L[(L.length-i)%L.length]:L[i%L.length];
     if(c.p!==sh||c.lo!==want.lo)F(key+' '+how+' shape '+sh+' step '+i+' went to '+c.txt+' wanted '+want.lo);
