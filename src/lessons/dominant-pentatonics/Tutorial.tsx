@@ -4,9 +4,9 @@ import { pipify } from "../../shared/pip";
 
 // A coach-mark tour of the lesson's controls: one spotlight on one control at a time, with a short note and Back / Next.
 // Each step names a CSS selector for what to light and, when the control only exists on another card, where to go first (`at`).
-// `keepBoard` steps (the sentence whose circles light the board) put the note wherever it does not cover the board; every other step puts it right beside what it lights.
+// The note always sits right beside what it lights. `also` lights a second control together with `sel` (their union); `settings` opens the settings panel for that step.
 // `live` steps let taps through to the lit control (so "tap a dot" really plays it); every other step blocks the page behind the note.
-export interface TutStep { sel: string; title: string; text: string; at?: [number, number]; live?: boolean; keepBoard?: boolean }
+export interface TutStep { sel: string; title: string; text: string; at?: [number, number]; live?: boolean; also?: string; settings?: boolean }
 
 const INK = "#4d3533";
 const INK2 = "#806a68";
@@ -26,6 +26,7 @@ const pill = (primary: boolean): CSSProperties => ({
 export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep) => void; onClose: (finished: boolean) => void }) {
   const { steps, onStep, onClose } = props;
   const [i, setI] = useState<number>(0);
+  const wasSettings = useRef<boolean>(false);
   const [box, setBox] = useState<Box | null>(null);
   const [cardTop, setCardTop] = useState<number>(12);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -43,7 +44,11 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
       const el = document.querySelector(step.sel);
       if (!alive || !el) return;
       const r = el.getBoundingClientRect();
-      setBox({ top: r.top, left: r.left, width: r.width, height: r.height });
+      const o = step.also ? document.querySelector(step.also) : null;
+      const q = o ? o.getBoundingClientRect() : r;
+      const top = Math.min(r.top, q.top);
+      const left = Math.min(r.left, q.left);
+      setBox({ top, left, width: Math.max(r.right, q.right) - left, height: Math.max(r.bottom, q.bottom) - top });
     };
     let tries = 0;
     const find = (): void => {
@@ -55,27 +60,22 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
       measure();
       timers.push(window.setTimeout(measure, 450));
     };
-    timers.push(window.setTimeout(find, step.at ? 120 : 0));
+    // The settings panel opens and closes in 280 ms and moves everything under it: let it finish first, so the spotlight
+    // is measured once at its final size and never changes shape on the way.
+    const settle = step.settings || wasSettings.current ? 320 : 0;
+    wasSettings.current = !!step.settings;
+    timers.push(window.setTimeout(find, (step.at ? 120 : 0) + settle));
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     return () => { alive = false; timers.forEach((t: number) => window.clearTimeout(t)); window.removeEventListener("resize", measure); window.removeEventListener("scroll", measure, true); };
   }, [i]);
 
-  // Put the note right below the lit control, or above it when there is no room; never off screen. On a keepBoard step the board has to stay
-  // in view (tapping a note lights it there), so the note goes wherever it does not cover the board.
+  // Put the note right below the lit control, or above it when there is no room; never off screen.
   useLayoutEffect(() => {
     const h = cardRef.current ? cardRef.current.offsetHeight : 0;
     const vh = window.innerHeight;
     if (!box) { setCardTop(Math.max(12, vh - h - 12)); return; }
-    const bd = document.querySelector("#nine-board");
-    const br = bd ? bd.getBoundingClientRect() : null;
-    const clear = (t: number): boolean => t >= 8 && t + h <= vh - 8 && (!br || t + h < br.top - 8 || t > br.bottom + 8);
     let t = box.top + box.height + 18;
-    if (step.keepBoard && br) {
-      const bottom = vh - h - 12;
-      const top = 12;
-      t = clear(bottom) ? bottom : clear(top) ? top : t;
-    }
     if (t + h > vh - 8) t = box.top - 18 - h;
     if (t < 8) t = vh - h - 8;
     setCardTop(t);

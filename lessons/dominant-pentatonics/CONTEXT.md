@@ -118,4 +118,5 @@ Each item is a request from Jordan, then what was done.
 - Synonym chord names (Eø, Gm6, C9) are buttons that set Count from to that chord.
 - Rule: every note name and interval in running text is a circle, roots red (`src/shared/pip.tsx`, `pipify`; what counts is `src/shared/tokens.json`; `[x]` forces a circle). `tests/circles.js` walks every beat, Helps to know and every tutorial step and fails on plain-text ones. Exempt: chord/scale names (bold, headings), the step chips, form controls such as the Key select.
 - Tutorial note sits beside what it lights (only the sentence step keeps clear of the board); spotlight and note glide between steps and crossfade.
+- The legend row is gone (Jordan: not useful, busy). `legendSpec` still feeds the share image. Explore's "(Eø)" and "(Gm6)" are the same count-from buttons as elsewhere. The tutorial opens the settings panel on its Settings step and waits for it to settle before moving the spotlight.
 

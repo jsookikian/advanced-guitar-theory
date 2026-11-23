@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useRef } from "grok/canvas";
 import type { CSSProperties, ChangeEvent, ReactNode } from "grok/canvas";
 import { pluck, playPhrase, stopAll, setInstrument, INSTRUMENTS } from "../../shared/audio";
 import type { InstrumentId } from "../../shared/audio";
-import { pipify } from "../../shared/pip";
 import Tutorial from "./Tutorial";
 import type { TutStep } from "./Tutorial";
 
@@ -395,19 +394,6 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
   return yy;
 }
 
-function Key(props: { kind: KeyKind; children: ReactNode }) {
-  const { kind } = props;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", color: INK2, backgroundColor: PAGE }}>
-      <svg width={12} height={12} viewBox="0 0 16 16" style={{ display: "block" }}>
-        <circle cx={8} cy={8} r={kind === "root" ? 7.5 : 6.5} strokeWidth={kind === "dash" ? 1.4 : 0} strokeDasharray={kind === "dash" ? "2.5 2" : undefined} style={{ fill: kind === "fill" ? INK : kind === "teal" ? TEAL : kind === "root" ? RED : PAGE, stroke: kind === "teal" ? TEAL : kind === "root" ? RED : INK }} />
-        {kind === "root" ? <text x={8} y={11.6} textAnchor="middle" fontSize={10} fontWeight={700} style={{ fill: "#ffffff" }}>R</text> : null}
-      </svg>
-      <span style={{ color: INK2, backgroundColor: PAGE }}>{props.children}</span>
-    </span>
-  );
-}
-
 const btn = (primary: boolean, disabled: boolean): CSSProperties => ({
   height: CH, borderRadius: RAD, padding: "0 14px", border: BORDER, backgroundColor: primary ? INK : PAGE, color: primary ? PAGE : INK,
   cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.35 : 1, fontFamily: SANS, fontSize: CFS, fontWeight: 500, lineHeight: "18px",
@@ -474,10 +460,10 @@ function homeIndex(list: Pos[]): number {
 const TUT_SEEN = "agt-dominant-pentatonics-tutorial-seen";
 const TUT_STEPS: TutStep[] = [
   { at: [0, 0], live: true, sel: "#nine-board", title: "The fretboard", text: "Six strings, frets 1 to 7. Every dot is a note of the chord or scale. Tap any dot to hear it." },
-  { at: [0, 0], live: true, keepBoard: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board. Tap one to spotlight that note on the board and hear it." },
+  { at: [0, 0], live: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board. Tap one to spotlight that note on the board and hear it." },
   { at: [0, 0], live: true, sel: "#nine-hear", title: "Hear it", text: "Plays what is lit on the board, so you hear exactly what the sentence is about." },
   { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals ([R] [3] [5] [b7]) and note names ([C] [E] [G] [Bb]). The root is always red." },
-  { at: [0, 0], sel: 'button[aria-label="Display settings"]', title: "Settings", text: "Count from, Key, Left-handed, Sound, Neck and Share image live here. Count from changes which note the intervals are measured from." },
+  { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#nine-settings", title: "Settings", text: "Count from, Key, Left-handed, Sound, Neck and Share image live here. Count from changes which note the intervals are measured from." },
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "The lesson has eight steps. Tap any one to jump straight to it." },
   { at: [0, 0], sel: "#nine-name + div", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
   { at: [2, 2], sel: ".nine-card p button[aria-pressed]", title: "Chord names are buttons", text: "A chord name with a dotted underline is a button. Tap it to count the board's intervals from that chord, and tap it again to go back." },
@@ -538,6 +524,7 @@ export default function App() {
   const startTutorial = (): void => { tutFrom.current = { card: cardRef.current, beat }; setOpen(false); setTut(true); };
   const endTutorial = (): void => {
     setTut(false);
+    setOpen(false);
     try { window.localStorage.setItem(TUT_SEEN, "1"); } catch { /* private mode: the tour just offers itself again */ }
     go(tutFrom.current.card, tutFrom.current.beat);
   };
@@ -676,7 +663,6 @@ export default function App() {
 
   // The same position is a different CAGED shape depending on the root you count from.
   const cg = (deg: number): string => CAGED[deg][cur.p];
-  const cagedLine = `Shape ${cur.p + 1}: the ${cg(0)} shape from ${I}, the ${cg(4)} shape from ${III} (${III}ø), the ${cg(7)} shape from ${V} (${V}m6).`;
   const layerSeg = () => segBtn([{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7], "nine-layers");
 
   const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Seg options={o} value={v} onChange={on} weights={weights} className={className} />;
@@ -724,6 +710,10 @@ export default function App() {
   };
   const chips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`cs${d}`}>{i > 0 ? " " : ""}{chip(d)}</span>);
 
+  // The CAGED shape names (A shape, D shape...) are shape names, not notes, so they stay bold text; the notes the shapes are counted from are circles.
+  const cagedLine: ReactNode = (
+    <>Shape {cur.p + 1}: the <B>{cg(0)} shape</B> from {chip(0)}, the <B>{cg(4)} shape</B> from {chip(4)} (<Syn d={4}>{III}{"\u00f8"}</Syn>), the <B>{cg(7)} shape</B> from {chip(7)} (<Syn d={7}>{V}m6</Syn>).</>
+  );
   const next = (): void => {
     if (beat < nBeats - 1) { setDir(1); setBeat(beat + 1); } else go(card === total - 1 ? 0 : card + 1);
   };
@@ -786,23 +776,23 @@ export default function App() {
   let body: ReactNode = null;
   if (content && cb) body = <>{beatDots}{head(content.head)}{line(cb.text)}</>;
   else body = (
-    <>{head("Explore the neck.")}{line(pipify(cagedLine, { root: I }))}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
+    <>{head("Explore the neck.")}{line(cagedLine)}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
   );
 
+  // (The on-screen legend is gone; this list only feeds the share image.)
   const legendSpec: { kind: KeyKind; text: string }[] = [];
-  if (shown.some((d: Dot) => d.d === ringDeg)) legendSpec.push({ kind: "root", text: `R = root (${n(ringDeg)})` });
+  if (shown.some((d: Dot) => d.d === ringDeg)) legendSpec.push({ kind: "root", text: `root ${n(ringDeg)}` });
   if (mode === "chord") legendSpec.push({ kind: "fill", text: "chord tones" });
-  if (mode === "arp" || mode === "penta" || mode === "mixo") legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 (${n(2)})` : `${n(2)}, the 9 of ${I}` });
-  if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `[4] and [6] ([${n(5)}] [${n(9)}])` : `${n(5)} ${n(9)}, the [4] and [6] of ${I}` });
+  if (mode === "arp" || mode === "penta" || mode === "mixo") legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 ${n(2)}` : `${n(2)}, the 9 of ${I}` });
+  if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `[4] and [6] ${n(5)} ${n(9)}` : `${n(5)} ${n(9)}, the [4] and [6] of ${I}` });
   if (mode === "grip") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 2" : `Drop 2 \u00b7 ${vname(cur.drop)}` });
   if (mode === "drop3") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 3" : `Drop 3 \u00b7 ${vname(cur.drop3)}` });
   if (guided && C.kind !== "names") {
     legendSpec.length = 0;
-    if (C.kind === "c7") { legendSpec.push({ kind: "root", text: `R = root (${n(ringDeg)})` }, { kind: "fill", text: "chord tones" }); }
+    if (C.kind === "c7") { legendSpec.push({ kind: "root", text: `root ${n(ringDeg)}` }, { kind: "fill", text: "chord tones" }); }
     else if (C.kind === "lose") legendSpec.push({ kind: "fill", text: `kept: ${III} ${V} ${n(10)}` });
-    else legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 (${n(2)})` : `${n(2)}, the 9 of ${I}` }, { kind: "fill", text: `${III} ${V} ${n(10)}` });
+    else legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 ${n(2)}` : `${n(2)}, the 9 of ${I}` }, { kind: "fill", text: `${III} ${V} ${n(10)}` });
   }
-  const legend: ReactNode[] = legendSpec.map((it: { kind: KeyKind; text: string }) => <Key key={it.kind + it.text} kind={it.kind}>{pipify(it.text, { root: n(ringDeg), ninth: n(2) })}</Key>);
 
   // Share: draw the current diagram onto a 1080x1080 paper-white PNG, then hand it to the share sheet (or download it).
   const LAYER_NAME: Record<Mode, string> = { chord: "Chord tones", arp: "Arpeggio", penta: "Pentatonic", mixo: "Mixolydian", grip: "Drop 2", drop3: "Drop 3" };
@@ -1030,11 +1020,7 @@ export default function App() {
         </div>
 
         <div className="nine-q" style={{ minHeight: 34, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", backgroundColor: PAGE }}>
-            <span key={`lg${mode}${ringDeg}${keyId}`} style={{ display: "flex", flexWrap: "wrap", minWidth: 0, columnGap: 12, rowGap: 2, animation: "nine-in 320ms ease both", backgroundColor: PAGE }}>
-              {legend}
-            </span>
-          </div>
+          <div style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }} />
             <div role="radiogroup" id="nine-show" aria-label="Show intervals or note names" className="nine-q" style={{ display: "inline-flex", flex: "0 0 auto", height: 24, border: `1px solid ${LINE_UI}`, borderRadius: 12, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
               {[["intervals", "Intervals"], ["notes", "Notes"]].map(([v, lb]: string[]) => (
                 <button key={v} type="button" role="radio" aria-checked={show === v} onClick={() => setShow(v)} style={{ height: "100%", padding: "0 8px", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "22px", color: show === v ? PAGE : INK, backgroundColor: show === v ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease" }}>{lb}</button>
@@ -1148,7 +1134,7 @@ export default function App() {
           </div>
         );
       })() : null}
-      {tut ? <Tutorial steps={TUT_STEPS} onStep={(st: TutStep) => { const at = st.at ?? [0, 0]; go(at[0], at[1]); }} onClose={endTutorial} /> : null}
+      {tut ? <Tutorial steps={TUT_STEPS} onStep={(st: TutStep) => { const at = st.at ?? [0, 0]; go(at[0], at[1]); setOpen(st.settings === true); }} onClose={endTutorial} /> : null}
     </div>
   );
 }

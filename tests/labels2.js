@@ -58,10 +58,9 @@ const res=await pg.evaluate(async()=>{
       if(lab!==exp || red!==(d===r)) fails.push(`card${c+1} ${em} ${tg} sh${shp} ${mode} ${fl}: s${s}f${f} got '${lab}' red=${red} want '${exp}'`);
      }
      const BASE={0:'C9',4:'Eø',7:'Gm6'}[r];
-     const leg=document.querySelector('.nine-card').nextElementSibling.textContent;
+     const leg=document.getElementById('nine-name').textContent;
      const rootShown=[...document.querySelectorAll('#nine-board g[data-vis="1"]')].some(g=>(OP[+g.dataset.s]+ +g.dataset.f)%12===r);
      legChecks++;
-     if(!quiz && rootShown && c!==1 && c!==2 && !leg.includes('R = root ('+NOTE[r]+')')) fails.push(`legend card${c+1} ${em} ${tg} ${mode} ${fl}: ${leg}`);
      if(c===6){ nameChecks++; const h2=document.querySelector('.nine-card h2').textContent; if(!new RegExp(BASE+'( no root|/[A-G]b?)?$').test(h2)) fails.push(`name card6 ${tg} ${fl}: ${h2}`);}
      if(c===7&&!quiz&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; if(!new RegExp(tg+' · '+BASE+'( no root|/[A-G]b?)?').test(leg)) fails.push(`legend name ${tg} ${fl}: ${leg}`);}
      const gl=[...document.querySelectorAll('#nine-settings [role=radiogroup]')][0].querySelector('[aria-checked=true]').textContent;
