@@ -114,3 +114,6 @@ Each item is a request from Jordan, then what was done.
 - "Lose the root" is now "Rootless Chords" (chip "Rootless"); names read "C7 Rootless". Its fade-the-root beat is merged into the first beat (2 beats).
 - Chord names in running text are bold. "Eø or Gm6 or a rootless C9".
 - Mixolydian step assumes the scale is known (5 beats: add the 4 and 6, the 6/13 colour tone, the avoid note, where it lands x2). Hear it plays the 4 and 6 on the first beat. Mixolydian is listed in "Helps to know".
+- Tutorial: `Tutorial.tsx` is a coach-mark tour (12 steps, `TUT_STEPS` in `lesson.tsx`). It opens once on a first visit (localStorage `agt-dominant-pentatonics-tutorial-seen`; never under automation), from "Show tutorial" under the title on step 1, and from Settings. "Live" steps let taps reach the lit control and keep the card off the board.
+- Synonym chord names (Eø, Gm6, C9) are buttons that set Count from to that chord.
+

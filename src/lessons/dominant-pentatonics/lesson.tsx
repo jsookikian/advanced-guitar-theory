@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useRef } from "grok/canvas";
 import type { CSSProperties, ChangeEvent, ReactNode } from "grok/canvas";
 import { pluck, playPhrase, stopAll, setInstrument, INSTRUMENTS } from "../../shared/audio";
 import type { InstrumentId } from "../../shared/audio";
+import Tutorial from "./Tutorial";
+import type { TutStep } from "./Tutorial";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -467,6 +469,23 @@ function homeIndex(list: Pos[]): number {
   return i >= 0 ? i : 0;
 }
 
+// The first-time tour: each step lights one control (CSS selector) on the card it lives on (`at` = card, beat).
+const TUT_SEEN = "agt-dominant-pentatonics-tutorial-seen";
+const TUT_STEPS: TutStep[] = [
+  { at: [0, 0], live: true, sel: "#nine-board", title: "The fretboard", text: "Six strings, frets 1 to 7. Every dot is a note of the chord or scale. Tap any dot to hear it." },
+  { at: [0, 0], live: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. The note and interval circles in the text are buttons: tap one to spotlight that note on the board and hear it." },
+  { at: [0, 0], live: true, sel: "#nine-hear", title: "Hear it", text: "Plays what is lit on the board, so you hear exactly what the sentence is about." },
+  { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals (R, 3, 5, b7) and note names (C, E, G, Bb)." },
+  { at: [0, 0], sel: 'button[aria-label="Display settings"]', title: "Settings", text: "Count from, Key, Left-handed, Sound, Neck and Share image live here. Count from changes which note the intervals are measured from." },
+  { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "The lesson has eight steps. Tap any one to jump straight to it." },
+  { at: [0, 0], sel: "#nine-name + div", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
+  { at: [2, 2], sel: ".nine-card p button[aria-pressed]", title: "Chord names are buttons", text: "A chord name with a dotted underline is a button. Tap it to count the board's intervals from that chord, and tap it again to go back." },
+  { at: [7, 0], live: true, sel: "#nine-shape", title: "Explore: the five shapes", text: "The last step opens the whole neck. Pick one of the five pentatonic shapes." },
+  { at: [7, 0], live: true, sel: "#nine-board", title: "Walk the neck", text: "Swipe or scroll the neck, or use the arrows at its edges, to move up and down the shapes." },
+  { at: [7, 0], live: true, sel: "#nine-octave", title: "Octave", text: "Move the current shape up or down an octave. Tapping the selected shape does the same." },
+  { at: [7, 0], live: true, sel: "#nine-play", title: "Play", text: "Plays the notes of the shape from low to high. Tap again to stop." },
+];
+
 // Injected by build.mjs from lesson.json ("helps to know": background that helps but is not required).
 interface Helpful { topic: string; why: string; href: string | null }
 declare const __HELPFUL__: Helpful[];
@@ -482,6 +501,8 @@ export default function App() {
   const [lefty, setLefty] = useState<boolean>(false);
   const [open, setOpen] = useState<boolean>(false);
   const [helpOpen, setHelpOpen] = useState<boolean>(false);
+  const [tut, setTut] = useState<boolean>(false);
+  const tutFrom = useRef<{ card: number; beat: number }>({ card: 0, beat: 0 });
   const [layerMode, setLayerMode] = useState<string>("penta");
   const [inst, setInst] = useState<number>(-1);
   const [jump, setJump] = useState<number>(0);
@@ -513,6 +534,20 @@ export default function App() {
   const frameRef = useRef<string>("0");
   frameRef.current = frame;
   const navRef = useRef<{ next: () => void; prev: () => void }>({ next: () => {}, prev: () => {} });
+  const startTutorial = (): void => { tutFrom.current = { card: cardRef.current, beat }; setOpen(false); setTut(true); };
+  const endTutorial = (): void => {
+    setTut(false);
+    try { window.localStorage.setItem(TUT_SEEN, "1"); } catch { /* private mode: the tour just offers itself again */ }
+    go(tutFrom.current.card, tutFrom.current.beat);
+  };
+  // First visit: open the tour once (never under automation, so the tests stay clear of it).
+  useEffect(() => {
+    let seen = false;
+    try { seen = window.localStorage.getItem(TUT_SEEN) === "1"; } catch { seen = false; }
+    if (seen || navigator.webdriver) return;
+    const t = window.setTimeout(() => setTut(true), 900);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -959,10 +994,13 @@ export default function App() {
           <h1 style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.5px", color: INK, backgroundColor: PAGE, margin: 0 }}>Dominant Pentatonics</h1>
           <a href="/" style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 12.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE, textDecoration: "none" }}>{"← All lessons"}</a>
         </div>
-        {card === 0 && beat === 0 && HELPFUL.length > 0 ? (
+        {card === 0 && beat === 0 ? (
           <div className={helpOpen ? "nine-q" : "nine-q nine-quiet"} style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
-            <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{helpOpen ? "Helps to know \u25b4" : "Helps to know \u25be"}</button>
-            {helpOpen ? (
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, backgroundColor: PAGE }}>
+              {HELPFUL.length > 0 ? <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{helpOpen ? "Helps to know \u25b4" : "Helps to know \u25be"}</button> : null}
+              <button type="button" id="nine-tutorial" onClick={startTutorial} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>Show tutorial</button>
+            </div>
+            {helpOpen && HELPFUL.length > 0 ? (
               <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
                 {HELPFUL.map((h: Helpful) => (
                   <li key={h.topic} style={{ backgroundColor: PAGE }}>
@@ -1051,7 +1089,10 @@ export default function App() {
                   <Field label="Neck (Explore card)" style={{ opacity: onExplore ? 1 : 0.35, pointerEvents: onExplore ? "auto" : "none", transition: "opacity 200ms ease" }}>
                     <span id="nine-full" style={{ display: "block", backgroundColor: PAGE }}>{segBtn([{ value: "scroll", label: "Scroll" }, { value: "full", label: "Fit all" }], full ? "full" : "scroll", (v: string) => setFull(v === "full"))}</span>
                   </Field>
-                  <button type="button" className="nine-btn" aria-label="Share this diagram as an image" id="nine-share" style={btn(false, false)} onClick={() => { void sharePng(); }}>Share image</button>
+                  <div style={{ display: "flex", gap: 8, backgroundColor: PAGE }}>
+                    <button type="button" className="nine-btn" id="nine-settings-tutorial" style={btn(false, false)} onClick={startTutorial}>Show tutorial</button>
+                    <button type="button" className="nine-btn" aria-label="Share this diagram as an image" id="nine-share" style={btn(false, false)} onClick={() => { void sharePng(); }}>Share image</button>
+                  </div>
                 </div>
               </div>
           </div>
@@ -1105,6 +1146,7 @@ export default function App() {
           </div>
         );
       })() : null}
+      {tut ? <Tutorial steps={TUT_STEPS} onStep={(st: TutStep) => { const at = st.at ?? [0, 0]; go(at[0], at[1]); }} onClose={endTutorial} /> : null}
     </div>
   );
 }
