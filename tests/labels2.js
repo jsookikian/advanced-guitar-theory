@@ -13,7 +13,7 @@ const res=await pg.evaluate(async()=>{
  for(let c=0;c<8;c++){
   await goCard(c);
   if(c<=6){ // guided steps: walk every beat, check each lit and dimmed dot's label, the red root, and the bold chord name
-   const NB=[3,3,4,3,3,6,3][c];
+   const NB=[3,2,4,3,3,5,3][c];
    for(let bi=0;bi<NB;bi++){
     if(bi>0){ document.querySelector('.nine-btn-primary').click(); await S(80); }
     for(const mode of ['Intervals','Notes']){

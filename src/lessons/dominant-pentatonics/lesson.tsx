@@ -445,7 +445,7 @@ function instances(k: KeyDef): Pos[] {
 }
 // Short labels for the step chips (the progress row doubles as navigation: any card is one tap away).
 // Third chip: "Synonyms" on a phone, "Chord Synonyms" once there is room (CSS swaps the two spans).
-const STEP_LABEL = ["C7", "No root", "The 9", "Synonyms", "Pentatonic", "Mixolydian", "Drop", "Explore"];
+const STEP_LABEL = ["C7", "Rootless", "The 9", "Synonyms", "Pentatonic", "Mixolydian", "Drop", "Explore"];
 const STEP_LONG: Record<number, string> = { 3: "Chord Synonyms" };
 // The guided steps: each makes one statement on one fixed position (Shape 1), dims every note that is not part of it and lights the ones that are.
 const GUIDED = new Set<string>(["c7", "lose", "nine", "names", "penta", "mixo", "voicing"]);
@@ -455,11 +455,11 @@ type Lit = number[] | "penta" | "drop2" | "drop3";
 interface BeatSpec { lit: Lit; ring?: number; mode?: Mode; step: Step }
 const BEAT_SPEC: Record<string, BeatSpec[]> = {
   c7: [{ lit: CHORD, step: 1 }, { lit: [0], step: 1 }, { lit: [4, 7, 10], step: 1 }],
-  lose: [{ lit: [0], step: 1 }, { lit: [4, 7, 10], step: 1 }, { lit: [4, 7, 10], step: 1 }],
+  lose: [{ lit: [4, 7, 10], step: 1 }, { lit: [4, 7, 10], step: 1 }],
   nine: [{ lit: [2], step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }],
   names: [{ lit: ARP, ring: 4, step: 2 }, { lit: ARP, ring: 7, step: 2 }, { lit: ARP, ring: 0, step: 2 }],
   penta: [{ lit: ARP, step: 2 }, { lit: "penta", step: 2 }, { lit: ARP, step: 2 }],
-  mixo: [{ lit: "penta", step: 3 }, { lit: [5, 9], step: 3 }, { lit: [9], step: 3 }, { lit: [5, 4], step: 3 }, { lit: [10, 4, 2], step: 3 }, { lit: [9, 5, 0], step: 3 }],
+  mixo: [{ lit: [0, 2, 4, 5, 7, 9, 10], step: 3 }, { lit: [9], step: 3 }, { lit: [5, 4], step: 3 }, { lit: [10, 4, 2], step: 3 }, { lit: [9, 5, 0], step: 3 }],
   voicing: [{ lit: "drop2", mode: "grip", step: 4 }, { lit: "drop3", mode: "drop3", step: 4 }, { lit: ARP, mode: "arp", step: 2 }],
 };
 function homeIndex(list: Pos[]): number {
@@ -581,7 +581,7 @@ export default function App() {
   const notes = (ds: number[]): string => ds.map(n).join(" ");
   const ivs = (ds: number[]): string => ds.map(iv).join(" ");
 
-  const shown = modeDots(cur.dots, mode);
+  const shown = modeDots(cur.dots, mode).filter((d: Dot) => !(C.kind === "c7" && d.d === 2)); // the 9 is not part of C7: it is not drawn on that step
   // Guided beats: the notes the sentence is about stay lit; every other note of the position is dimmed.
   const isLit = (d: Dot): boolean => {
     if (!bt) return true;
@@ -633,7 +633,7 @@ export default function App() {
     const ds = [...set].map((key: string) => { const [s, f] = key.split("-").map(Number); return { s, f, d: degOf(s, f, k), add: false }; });
     const bass = ds.reduce((a: Dot, b: Dot) => (pitch(b) < pitch(a) ? b : a));
     const base = nameFrame === 0 ? `${I}9` : nameFrame === 4 ? `${III}\u00f8` : `${V}m6`;
-    if (nameFrame === 0) return `${I}9 no root`;
+    if (nameFrame === 0) return `${I}9 Rootless`;
     return bass.d === nameFrame ? base : `${base}/${n(bass.d)}`;
   };
   const shapeLabel = (q: Pos): string => `Shape ${q.p + 1}`;
@@ -669,12 +669,16 @@ export default function App() {
     });
     if (lowest >= 0) void pluck(lowest, 0.8);
   };
-  const chip = (deg: number, ring: number = eff): ReactNode => {
+  const chip = (deg: number, ring: number = eff, label?: string): ReactNode => {
     const bg = deg === ring ? RED : deg === 2 ? TEAL : INK;
     return (
-      <button key={`chip${deg}`} type="button" className="nine-note" aria-label={`Show ${n(deg)} on the board`} onClick={() => noteTap(deg)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, padding: "0 6px", margin: "0 1px", boxSizing: "border-box", verticalAlign: "baseline", border: 0, borderRadius: 11, cursor: "pointer", fontFamily: SANS, fontSize: 12, fontWeight: 700, lineHeight: "22px", letterSpacing: 0, color: "#ffffff", backgroundColor: bg }}>{n(deg)}</button>
+      <button key={`chip${deg}`} type="button" className="nine-note" aria-label={`Show ${n(deg)} on the board`} onClick={() => noteTap(deg)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, padding: "0 6px", margin: "0 1px", boxSizing: "border-box", verticalAlign: "baseline", border: 0, borderRadius: 11, cursor: "pointer", fontFamily: SANS, fontSize: 12, fontWeight: 700, lineHeight: "22px", letterSpacing: 0, color: "#ffffff", backgroundColor: bg }}>{label ?? n(deg)}</button>
     );
   };
+  // The same dot showing the interval (3, 5, b7) instead of the note name; tapping it still lights that note.
+  const ivChips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`ic${d}`}>{i > 0 ? " " : ""}{chip(d, eff, iv(d))}</span>);
+  // Chord names in running text are bold, so they read as names and not as ordinary words.
+  const B = (props: { children: ReactNode }): ReactNode => <strong style={{ fontWeight: 700 }}>{props.children}</strong>;
   const chips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`cs${d}`}>{i > 0 ? " " : ""}{chip(d)}</span>);
 
   const next = (): void => {
@@ -690,43 +694,41 @@ export default function App() {
     const dr = (set: Set<string>, label: string): string => `${vname(set)} \u00b7 ${label}`;
     switch (kind) {
       case "c7": return { head: `${I}7, the chord.`, beats: [
-        { text: <>{I}7 is four notes: {chips(CHORD)}. The dimmed {chip(2)} is not in the chord.</>, name: `${I}7` },
+        { text: <><B>{I}7</B> is four notes: {chips(CHORD)}.</>, name: `${I}7` },
         { text: <>{chip(0)} is the root, the note the chord is named for. It is the red R.</>, name: `${I}7` },
-        { text: <>{chip(4)}, {chip(7)} and {chip(10)} are the 3, 5 and b7. They give it the dominant sound.</>, name: `${I}7` },
+        { text: <>{chip(4)}, {chip(7)} and {chip(10)} are the {ivChips([4, 7, 10])}. They give <B>{I}7</B> the dominant sound.</>, name: `${I}7` },
       ] };
-      case "lose": return { head: "Lose the root.", beats: [
-        { text: <>When you comp behind a soloist, the bass player usually plays the root: every {chip(0)} on the board.</>, name: `${I}7` },
-        { text: <>So you can leave it out. Every {chip(0)} fades away.</>, name: `${I}7 no root` },
-        { text: <>{chips([4, 7, 10])} are what is left, and they still say {I}7: the 3, 5 and b7 carry the sound.</>, name: `${I}7 no root` },
+      case "lose": return { head: "Rootless Chords.", beats: [
+        { text: <>When you comp behind a soloist, the bass player usually plays the root, every {chip(0)}. So you can leave it out.</>, name: `${I}7 Rootless` },
+        { text: <>{chips([4, 7, 10])} are what is left, and they still say <B>{I}7</B>: the {ivChips([4, 7, 10])} carry the sound.</>, name: `${I}7 Rootless` },
       ] };
       case "nine": return { head: "Add the 9.", beats: [
         { text: <>Now add one note: the 9, {chip(2)}. It sits a whole step above the root.</>, name: `${n(2)}, the 9 of ${I}` },
-        { text: <>{chips(ARP)}: four notes again, now with a new colour.</>, name: `${I}9 no root` },
-        { text: <>These four notes, {chips(ARP)}, are {III}{"\u00f8"} or {V}m6</>, name: `${I}9 no root` },
-        { text: <>Try it: over {I}7, play an {III}{"\u00f8"} or {V}m6 arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
+        { text: <>{chips(ARP)}: four notes again, now with a new color.</>, name: `${I}9 Rootless` },
+        { text: <>These four notes, {chips(ARP)}, are <B>{III}{"\u00f8"}</B> or <B>{V}m6</B> or a rootless <B>{I}9</B>.</>, name: `${I}9 Rootless` },
+        { text: <>Try it: over <B>{I}7</B>, play an <B>{III}{"\u00f8"}</B> or <B>{V}m6</B> arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
       ] };
       case "names": return { head: "Chord Synonyms.", beats: [
-        { text: <>Read the same four notes from {chip(4, 4)}: R, b3, b5, b7. That is {III}{"\u00f8"}.</>, name: `${III}\u00f8` },
-        { text: <>Read them from {chip(7, 7)}: R, b3, 5, 6. That is {V}m6.</>, name: `${V}m6` },
-        { text: <>Over a {chip(0, 0)} bass they are {I}9 with no root. Same notes, three names.</>, name: `${I}9 no root` },
+        { text: <>Read the same four notes from {chip(4, 4)}: R, b3, b5, b7. That is <B>{III}{"\u00f8"}</B>.</>, name: `${III}\u00f8` },
+        { text: <>Read them from {chip(7, 7)}: R, b3, 5, 6. That is <B>{V}m6</B>.</>, name: `${V}m6` },
+        { text: <>Over a {chip(0, 0)} bass they are a rootless <B>{I}9</B>. Same notes, three names.</>, name: `${I}9 Rootless` },
       ] };
       case "penta": return { head: "The dominant pentatonic.", beats: [
-        { text: <>Start from those four notes, {chips(ARP)}.</>, name: `${I}9 no root` },
-        { text: <>Put the root back: {chips(PENTA)} is the dominant pentatonic, a box you already know.</>, name: `${I} dominant pentatonic` },
-        { text: <>Inside it hide the {III}{"\u00f8"} and {V}m6 arpeggios you just built.</>, name: `${I} dominant pentatonic` },
+        { text: <>Start from those four notes, {chips(ARP)}.</>, name: `${I}9 Rootless` },
+        { text: <>Put the root back: {chips(PENTA)} is the <B>{I} dominant pentatonic</B>, a box you already know.</>, name: `${I} dominant pentatonic` },
+        { text: <>Inside it hide the <B>{III}{"\u00f8"}</B> and <B>{V}m6</B> arpeggios you just built.</>, name: `${I} dominant pentatonic` },
       ] };
       case "mixo": return { head: `${I} Mixolydian.`, beats: [
-        { text: <>The pentatonic leaves two gaps: no 4 and no 13.</>, name: `${I} dominant pentatonic` },
-        { text: <>Fill them: {chip(5)} and {chip(9)}. That makes {I} Mixolydian.</>, name: `${I} Mixolydian` },
-        { text: <>{chip(9)} is the 13, a safe colour tone over {I}7.</>, name: `${I} Mixolydian` },
-        { text: <>{chip(5)} is the avoid note, a b9 above the 3: pass through it or resolve down to {chip(4)}.</>, name: `${I} Mixolydian` },
-        { text: <>Where it lands: over {I}7 the moving notes are {chips([10, 4, 2])}.</>, name: `${I}7` },
-        { text: <>Resolve to {n(5)}: {chip(10)} falls to {chip(9)}, {chip(4)} rises to {chip(5)}, {chip(2)} falls to {chip(0)}. Each moves one step.</>, name: `${n(5)}` },
+        { text: <>Add the 4 and 6, {chips([5, 9])}, to the pentatonic and you have <B>{I} Mixolydian</B>.</>, name: `${I} Mixolydian` },
+        { text: <>{chip(9)} is the 6, or 13, a safe color tone over <B>{I}7</B>.</>, name: `${I} Mixolydian` },
+        { text: <>{chip(5)} is the avoid note: pass through it or resolve down to {chip(4)}.</>, name: `${I} Mixolydian` },
+        { text: <>Where it lands: over <B>{I}7</B> the moving notes are {chips([10, 4, 2])}.</>, name: `${I}7` },
+        { text: <>Resolve to <B>{n(5)}</B>: {chip(10)} falls to {chip(9)}, {chip(4)} rises to {chip(5)}, {chip(2)} falls to {chip(0)}. Each moves one step.</>, name: `${n(5)}` },
       ] };
       default: return { head: "Play it as a chord.", beats: [
-        { text: <>Play four of the notes together: Drop 2. That is {III}{"\u00f8"} on the top four strings, or {I}9 without its root.</>, name: dr(cur.drop, "Drop 2") },
+        { text: <>Play four of the notes together: Drop 2. That is <B>{III}{"\u00f8"}</B> on the top four strings, or <B>{I}9</B> without its root.</>, name: dr(cur.drop, "Drop 2") },
         { text: <>Drop 3: move the top note down to the low E. New bass, new name.</>, name: dr(cur.drop3, "Drop 3") },
-        { text: <>Your turn: play the {III}{"\u00f8"} arpeggio over {I}7, then land on {chip(9)} as the chord moves to {n(5)}.</>, name: `${III}\u00f8` },
+        { text: <>Your turn: play the <B>{III}{"\u00f8"}</B> arpeggio over <B>{I}7</B>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${III}\u00f8` },
       ] };
     }
   };
@@ -885,7 +887,7 @@ export default function App() {
     if (!q) return d < 0 ? "This is the lowest copy, at the nut" : "This is the highest copy";
     return `${shapeLabel(q)} \u00b7 frets ${q.lo}\u2013${q.hi}`;
   };
-  const STEP_TITLE = [`${I}7 is four notes`, "Lose the root", "Add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 13`, "Drop 2 and Drop 3", "Explore the whole neck"];
+  const STEP_TITLE = [`${I}7 is four notes`, "Rootless Chords", "Add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop 2 and Drop 3", "Explore the whole neck"];
   const tipText = (id: string): string => {
     if (id.startsWith("step")) { const i = Number(id.slice(4)); return `${i + 1} \u00b7 ${STEP_TITLE[i]}`; }
     if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? " \u00b7 tap again for the next octave" : ""}`; }

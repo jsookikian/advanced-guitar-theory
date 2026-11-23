@@ -107,3 +107,10 @@ Each item is a request from Jordan, then what was done.
 - **Legacy tests.** The scripts in `tests/legacy/` target the 14-step layout and need new selectors.
 - **Reviews ran against moving builds:** the UI/QA report was written while the Play button and CAGED names were landing, so some of its screenshots are from the build just before.
 - **Explore at the nut:** the 7th fret number is cut off at the right edge when the neck is scrolled all the way to the nut.
+
+## Feedback round 31
+
+- C7 step hides the 9 (not in the chord). The 3, 5 and b7 are shown as interval dots like the note dots.
+- "Lose the root" is now "Rootless Chords" (chip "Rootless"); names read "C7 Rootless". Its fade-the-root beat is merged into the first beat (2 beats).
+- Chord names in running text are bold. "Eø or Gm6 or a rootless C9".
+- Mixolydian step assumes the scale is known (5 beats: add the 4 and 6, the 6/13 colour tone, the avoid note, where it lands x2). Hear it plays the 4 and 6 on the first beat. Mixolydian is listed in "Helps to know".
