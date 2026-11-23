@@ -679,6 +679,13 @@ export default function App() {
   const ivChips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`ic${d}`}>{i > 0 ? " " : ""}{chip(d, eff, d === eff ? "R" : iv(d))}</span>);
   // Chord names in running text are bold, so they read as names and not as ordinary words.
   const B = (props: { children: ReactNode }): ReactNode => <strong style={{ fontWeight: 700 }}>{props.children}</strong>;
+  // A chord name that is a synonym of the others is a button: tap it to count the board's intervals from that chord's root (tap again to go back to the root).
+  const Syn = (props: { d: number; children: ReactNode }): ReactNode => {
+    const on = frame === String(props.d);
+    return (
+      <button type="button" aria-pressed={on} aria-label={`Show the intervals from ${n(props.d)}`} onClick={() => setFrame(on && props.d !== 0 ? "0" : String(props.d))} style={{ display: "inline", padding: "0 3px", margin: 0, border: 0, borderRadius: 6, boxShadow: "none", cursor: "pointer", font: "inherit", fontWeight: 700, color: ink, backgroundColor: on ? LINE : PAGE, textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{props.children}</button>
+    );
+  };
   const chips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`cs${d}`}>{i > 0 ? " " : ""}{chip(d)}</span>);
 
   const next = (): void => {
@@ -705,21 +712,21 @@ export default function App() {
       case "nine": return { head: "Add the 9.", beats: [
         { text: <>Now add one note: the {ivChips([2])}, {chip(2)}. It sits a whole step above the root, {chip(0)}.</>, name: `${n(2)}, the 9 of ${I}` },
         { text: <>{chips(ARP)}: four notes again, now with a new color.</>, name: `${I}9 Rootless` },
-        { text: <>These four notes, {chips(ARP)}, are <B>{III}{"\u00f8"}</B> or <B>{V}m6</B> or a rootless <B>{I}9</B>.</>, name: `${I}9 Rootless` },
-        { text: <>Try it: over <B>{I}7</B>, play an <B>{III}{"\u00f8"}</B> or <B>{V}m6</B> arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
+        { text: <>These four notes, {chips(ARP)}, are <Syn d={4}>{III}{"\u00f8"}</Syn> or <Syn d={7}>{V}m6</Syn> or a rootless <Syn d={0}>{I}9</Syn>.</>, name: `${I}9 Rootless` },
+        { text: <>Try it: over <B>{I}7</B>, play an <Syn d={4}>{III}{"\u00f8"}</Syn> or <Syn d={7}>{V}m6</Syn> arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
       ] };
       case "names": return { head: "Chord Synonyms.", beats: [
         { text: <>Read the same four notes from {chip(4, 4)}: {ivChips([4, 7, 10, 2])}. That is <B>{III}{"\u00f8"}</B>.</>, name: `${III}\u00f8` },
         { text: <>Read them from {chip(7, 7)}: {ivChips([7, 10, 2, 4])}. That is <B>{V}m6</B>.</>, name: `${V}m6` },
-        { text: <>Over a {chip(0, 0)} bass they are a rootless <B>{I}9</B>. Same notes, three names.</>, name: `${I}9 Rootless` },
+        { text: <>Over a {chip(0, 0)} bass they are a rootless <Syn d={0}>{I}9</Syn>. Same notes, three names.</>, name: `${I}9 Rootless` },
       ] };
       case "penta": return { head: "The dominant pentatonic.", beats: [
         { text: <>Start from those four notes, {chips(ARP)}.</>, name: `${I}9 Rootless` },
         { text: <>Put the root back: {chips(PENTA)} is the <B>{I} dominant pentatonic</B>, a box you already know.</>, name: `${I} dominant pentatonic` },
-        { text: <>Inside it hide the <B>{III}{"\u00f8"}</B> and <B>{V}m6</B> arpeggios you just built.</>, name: `${I} dominant pentatonic` },
+        { text: <>Inside it hide the <Syn d={4}>{III}{"\u00f8"}</Syn> and <Syn d={7}>{V}m6</Syn> arpeggios you just built.</>, name: `${I} dominant pentatonic` },
       ] };
       case "mixo": return { head: `${I} Mixolydian.`, beats: [
-        { text: <>Where it all lives: the rootless <B>{I}9</B>, <B>{III}{"\u00f8"}</B> and <B>{V}m6</B> notes, {chips(ARP)}, are four notes of <B>{I} Mixolydian</B>.</>, name: `${I} Mixolydian` },
+        { text: <>Where it all lives: the rootless <Syn d={0}>{I}9</Syn>, <Syn d={4}>{III}{"\u00f8"}</Syn> and <Syn d={7}>{V}m6</Syn> notes, {chips(ARP)}, are four notes of <B>{I} Mixolydian</B>.</>, name: `${I} Mixolydian` },
         { text: <>The <B>{I} dominant pentatonic</B>, {chips(PENTA)}, is five of its seven.</>, name: `${I} Mixolydian` },
         { text: <>The other two are the {ivChips([5, 9])}, {chips([5, 9])}. {chip(9)} is the {ivChips([9])}, or {chip(9, eff, "13")}, a safe color tone over <B>{I}7</B>.</>, name: `${I} Mixolydian` },
         { text: <>{chip(5)} is the avoid note: pass through it or resolve down to {chip(4)}.</>, name: `${I} Mixolydian` },
@@ -727,9 +734,9 @@ export default function App() {
         { text: <>Resolve to <B>{n(5)}</B>: {chip(10)} falls to {chip(9)}, {chip(4)} rises to {chip(5)}, {chip(2)} falls to {chip(0)}. Each moves one step.</>, name: `${n(5)}` },
       ] };
       default: return { head: "Play it as a chord.", beats: [
-        { text: <>Play four of the notes together: Drop 2. That is <B>{III}{"\u00f8"}</B> on the top four strings, or <B>{I}9</B> without its root.</>, name: dr(cur.drop, "Drop 2") },
+        { text: <>Play four of the notes together: Drop 2. That is <Syn d={4}>{III}{"\u00f8"}</Syn> on the top four strings, or <Syn d={0}>{I}9</Syn> without its root.</>, name: dr(cur.drop, "Drop 2") },
         { text: <>Drop 3: move the top note down to the low E. New bass, new name.</>, name: dr(cur.drop3, "Drop 3") },
-        { text: <>Your turn: play the <B>{III}{"\u00f8"}</B> arpeggio over <B>{I}7</B>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${III}\u00f8` },
+        { text: <>Your turn: play the <Syn d={4}>{III}{"\u00f8"}</Syn> arpeggio over <B>{I}7</B>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${III}\u00f8` },
       ] };
     }
   };
