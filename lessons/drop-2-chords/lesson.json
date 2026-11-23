@@ -1,0 +1,20 @@
+{
+  "title": "Drop 2 Chords",
+  "summary": "Four-note chords on four neighbouring strings: where a Drop 2 voicing comes from, its string sets and inversions, and how one changed note turns one chord into the next.",
+  "level": "Advanced",
+  "order": 2,
+  "helpful": [
+    {
+      "topic": "seventh chords (maj7, 7, m7)",
+      "why": "Every chord here has four notes: a root, a third, a fifth and a seventh."
+    },
+    {
+      "topic": "the notes on the fretboard",
+      "why": "The lesson names each dot, and where it sits on its string."
+    },
+    {
+      "topic": "reading chord symbols",
+      "why": "Names like Cm7 and Cø7 tell you which notes are lowered."
+    }
+  ]
+}
