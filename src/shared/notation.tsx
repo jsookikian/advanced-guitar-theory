@@ -61,6 +61,8 @@ export function simpleBass(note: string): string {
 export interface TitlePiece { t: string; scale: number; rise: number; after?: number }
 const QUALITY = "maj\\d*|dim\\d*|m\\d*|\u00f8\\d*|\uE18F\\d*|[\uE18A\uE187]\\d+|-\\d*|\\d+";
 export function titlePieces(text: string): TitlePiece[] {
+  // Two readings of the same notes, "C-6 = A\u00f87": each side is set as its own chord name.
+  if (text.includes(" = ")) return text.split(" = ").flatMap((seg: string, i: number) => (i ? [{ t: " = ", scale: 1, rise: 0 }, ...titlePieces(seg)] : titlePieces(seg)));
   const acc = (t: string): TitlePiece => ({ t, scale: 0.92, rise: 0.5 });
   // A slash chord gets a little extra air after the "/" (G-6/ E).
   const rest = (t: string): TitlePiece[] => t.split(/([\u266d\u266f]|\/)/).filter((x: string) => x !== "").map((x: string) => (x === "\u266d" || x === "\u266f" ? acc(x) : x === "/" ? { t: x, scale: 1, rise: 0, after: 0.34 } : { t: x, scale: 1, rise: 0 }));
@@ -84,8 +86,14 @@ export function chordChildren(children: ReactNode): ReactNode {
 // The chord-symbol glyphs are Private Use codepoints that only MuseJazz Text draws, and the minus is that font's own hyphen: every quality
 // piece (the raised part of a name) sets MuseJazz Text itself, whatever the surrounding text is. Never bold: the font has one weight.
 export const MUSE_FONT = "'MuseJazz Text'";
-export function titleNodes(text: string): ReactNode {
-  return titlePieces(text).map((x: TitlePiece, i: number) => (x.scale === 1 && !x.after
+export function titleNodes(text: string, scale = 1.1): ReactNode {
+  if (text.includes(" = ")) return text.split(" = ").map((seg: string, i: number) => <span key={i}>{i ? " = " : ""}{titleNodes(seg, scale)}</span>);
+  const pieces = titlePieces(text);
+  // A chord name is set as a whole in MuseJazz Text (root letter, accidentals, quality, slash bass); other text (a title like "C Mixolydian")
+  // keeps the page font. `scale` evens out MuseJazz's size against the surrounding text (1 where the name is already in MuseJazz, the big title).
+  const chord = pieces.some((x: TitlePiece) => x.scale !== 1 || x.rise !== 0 || x.after !== undefined);
+  const inner = pieces.map((x: TitlePiece, i: number) => (x.scale === 1 && !x.after
     ? x.t
-    : <span key={i} data-sup="1" data-muse={x.scale === 0.84 ? "1" : undefined} style={{ fontSize: `${x.scale}em`, position: "relative", top: `-${x.rise}em`, margin: x.after ? `0 ${x.after}em 0 0.02em` : "0 0.02em 0 0.03em", whiteSpace: "nowrap", ...(x.scale === 0.84 ? { fontFamily: MUSE_FONT, fontWeight: 400 } : {}) }}>{x.t}</span>));
+    : <span key={i} data-sup="1" data-muse={x.scale === 0.84 ? "1" : undefined} style={{ fontSize: `${x.scale}em`, position: "relative", top: `-${x.rise}em`, margin: x.after ? `0 ${x.after}em 0 0.02em` : "0 0.02em 0 0.03em", whiteSpace: "nowrap" }}>{x.t}</span>));
+  return chord ? <span data-chord="1" style={{ fontFamily: MUSE_FONT, fontWeight: 400, fontSize: scale === 1 ? undefined : `${scale}em`, whiteSpace: "nowrap" }}>{inner}</span> : inner;
 }

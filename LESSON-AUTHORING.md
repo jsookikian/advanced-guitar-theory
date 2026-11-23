@@ -25,7 +25,9 @@ A practical guide for a future session asked to build a new lesson. It records w
 - `src/shared/share.ts`: `shareBoard({svg, title, subtitle, fileName})` draws the PNG: bold chord name, subtitle line, diagram. File names are ASCII-safe.
 - `src/shared/audio.ts`: `pluck` (tap a dot), `playPhrase` (strum or arpeggio), `stopAll`. Samples live in `/sounds`.
 - `src/shared/site-root.ts`: `SITE_ROOT` for every path (fonts, links, sounds). Pages work at a domain root and under a GitHub Pages subpath.
-- The Board of lesson 2 (`Board.tsx`) is a smaller copy of lesson 1's geometry (7-fret window, string names, nut). Dots are keyed by voice, so a changed note slides and the others do not move.
+- The Drop lessons share one engine: `src/shared/drop/` (`theory.ts` with a `DropType` config, `Board.tsx`, `DropLesson.tsx` with `makeDropLesson(config)`). A lesson folder (`src/lessons/drop-2-chords/`, `drop-3-chords/`) holds only its config (drop type, opening set and inversion, credit link) and its own wording for the opening, string-set and compare beats.
+  A new variation (for example Drop 2 and 4) is a new `DropType` plus a folder, not a copy of the engine. Behaviour of an existing lesson must stay unchanged: run its tests.
+- The Board of the Drop lessons is a smaller copy of lesson 1's geometry (7-fret window, string names, nut). Dots are keyed by voice, so a changed note slides and the others do not move.
 
 ## 3. Design rules Jordan enforces (and why)
 
@@ -33,6 +35,7 @@ A practical guide for a future session asked to build a new lesson. It records w
 - Constant page height between steps and beats: every step has the same rows (caption, button, label pill) even if some are empty. Test it.
 - The root is always a red dot (R). A rootless chord shows the missing root as a dashed red ring, never played.
 - Every note and interval in text is a circle. Roots are red; other dots are ink. In Explore the Drop 2 dots are ink, not teal.
+- Chord names are set as a whole in MuseJazz Text (root letter, accidentals, quality, slash bass): `titleNodes` wraps them in `data-chord` spans, `scale` evens the size against the sans text (1.1 by default, 1 in the big title). Selected tabs use underline and full ink, never bold (the font has one weight).
 - Chord names: MuseJazz lettering, real flats and sharps, symbols not letters. An inverted voicing is a slash chord with the extra space after the slash: C(triangle)7 / G. Root position shows no slash. A double-accidental bass is written as its simple enharmonic.
 - String sets are named by the bass: "Bass on String 6/5/4", everywhere (tabs, subtitles, share image, tutorial). Never "6-5-4-3".
 - Share: the native share sheet gets only the file (no `title`); the PNG itself has the chord name and the subtitle line.
@@ -40,6 +43,9 @@ A practical guide for a future session asked to build a new lesson. It records w
 - Guided beats: one short sentence each, one change per beat, unchanged dots stay put, changed dots get a ring and a dashed ghost where they were.
 - Two names for one dot (enharmonic) are shown on the board as a small "also ..." label beside the dot, off the string line, with a page-colour halo.
 - Quiet voice, our own words. A "Show tutorial" link on every step; the tour opens once on a first visit (never under automation).
+
+- Learn and practise (step 5 of the Drop lessons): from the major 7 chord, one note changes by one fret per beat (7, 3, 5, 7 again, then back up for the 6 chords); the learner switches the inversion and runs the same path.
+  Two beats re-read the same dots as the chord built on the 6th (C-6 = Aø7, C6 = A-7): first counted from C (red root on C), then, nothing moved, counted from A (red root hands over, title is the other chord as a slash chord over the real bass).
 
 ## 4. Teaching approach that worked
 
@@ -49,6 +55,8 @@ A practical guide for a future session asked to build a new lesson. It records w
 - Use external pages only as a topic checklist. Write all text yourself, draw your own diagrams, credit once as "Further reading".
 - The ii V i walk picks the V and i voicings with the smallest total fret movement on the same strings, and starts on the string set with the lowest range for the key.
 
+- Drop 3 drops the third note from the top, so the voicing is the bass, one silent string, then three neighbours (bass on string 6 with 4-3-2, bass on string 5 with 3-2-1). The close chord is shown one string above, the dropped note lands on the bass string, then the lowest remaining note steps across to the free string. A Compare step puts Drop 2 and Drop 3 side by side on the same bass note.
+
 ## 5. Music-theory pitfalls
 
 - Spell by interval: the letter comes from the interval number, the accidental from the pitch (`spellAt`). Double flats are correct (Bbb in Cdim7, Abb in Db dim7); never respell silently in the diagram.
@@ -56,9 +64,12 @@ A practical guide for a future session asked to build a new lesson. It records w
 - dim7 is symmetric: any of its notes can be the bass, so slash names for dim7 are a convention. We keep the chord's own spelling except double accidentals, which become the simple enharmonic (C dim7 over A).
 - A Drop 2 inversion is named by its lowest note, so root position is R 5 7 3 (the 2nd-inversion close chord with the root dropped).
 - Keys near the nut: require every quality's frets to be at least 1 for the home placement. Keys past fret 12 (E to F-sharp start high): there is no lower placement, so the window just goes up; check the highest fret stays at most 24.
+- Say string numbers right: the A string is string 5, the B string is string 2 (a copy bug said string 4 once). Compute string numbers from the voicing (`6 - stringIndex`) when you can.
 - Window the board per chord shape, not per beat, so only one dot moves when one note changes.
 
 ## 6. Tests
+
+`LESSON=drop-3-chords node drop2.js` runs the browser test against Drop 3 (the file serves both Drop lessons; the compare step shifts the step numbers by one). `drop3-theory.js` is the Drop 3 theory test, `metadata.js` checks the link-preview tags and cards.
 
 Run from `tests/`, with the browser path set (the variable does not survive between tool calls, so set it each time): `CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node <script>.js`. Do not rebuild while a run is in progress.
 
@@ -84,6 +95,12 @@ Run from `tests/`, with the browser path set (the variable does not survive betw
 - Leave unrelated untracked files alone (fonts/Petaluma*, tests/fontprobe*.js, tests/live*.js, tests/mixo.js).
 - Forma: `forma redeploy` (after `forma login --server https://tryforma.com`) needs confirmation; use `--clean` when files moved. GitHub Pages redeploys on push to `main`.
 
+## Link previews and share cards
+
+- `build.mjs` writes Open Graph and Twitter tags into the catalog and every lesson page. Crawlers need absolute URLs, so they come from `SITE_URL` (default the GitHub Pages site; build the Forma copy with `SITE_URL=https://advanced-guitar-theory.tryforma.com/ node build.mjs`). Runtime asset paths still use `SITE_ROOT`.
+- The 1200x630 cards (`share.png` at the root, `lessons/<id>/share.png`) are drawn by `src/cards/card.tsx` with the lessons' own Board and chord-name code and captured by `tests/make-share-cards.js` (needs `CHROME`). A lesson's card content is its `lesson.json` `card` entry (title, subtitle, chord: drop, set, inv, or rootless). Commit the PNGs; keep them under 300 KB; look at them.
+- `tests/metadata.js` checks the tags, the files and the sizes. Crawlers cache previews: after a deploy the old preview can persist until the platform's debugger (Facebook, LinkedIn, X) re-scrapes the URL.
+
 ## Checklist for a new lesson
 
 1. Folder + `lesson.json` + `main.tsx` + `lesson.tsx` (+ `theory.ts`); `node build.mjs`.
@@ -93,4 +110,5 @@ Run from `tests/`, with the browser path set (the variable does not survive betw
 5. Theory test for all 12 keys; browser test for circles, height, overflow, labels, share; fonts test.
 6. Screenshots at 390 (and 320) of every beat; look for tofu, collisions, clipping.
 7. Update the root `README.md` table, the lesson `README.md`, this guide if you learned something.
-8. Commit by file name; do not push unless asked.
+8. Add a `card` entry to `lesson.json`, run `make-share-cards.js`, look at the PNG, run `metadata.js` (adding a lesson also needs a share card).
+9. Commit by file name; do not push unless asked.

@@ -1,3 +1,4 @@
+import type { ReactNode } from "grok/canvas";
 import { titleNodes, spokenName } from "./notation";
 
 // The sheet's palette and the quiet controls shared by the lessons.
@@ -60,3 +61,11 @@ export function lockPaint(root: HTMLElement): void {
   });
 }
 
+
+// The lesson header (title row and step progress) pins to the top of the screen on narrow screens, quietly: paper background, a hairline under it.
+// The "Helps to know" and "Show tutorial" links sit below it and scroll away. On wide screens it is an ordinary block, as before.
+export function StickyHeader(props: { children: ReactNode }) {
+  return <div data-sticky="1" className="agt-sticky" style={{ backgroundColor: PAGE }}>{props.children}</div>;
+}
+export const STICKY_CSS = ".agt-sticky{display:flex;flex-direction:column;gap:8px} @media (max-width:600px){.agt-sticky{position:sticky;top:0;z-index:40;margin:-12px -16px 0;padding:12px 16px 6px;background:#fdfcfb;border-bottom:1px solid #dcd5d4}}"
+  + " html,body{overflow-x:clip!important}";

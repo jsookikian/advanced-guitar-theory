@@ -8,7 +8,7 @@ import type { TutStep } from "../../shared/Tutorial";
 import { KEYS, flat, titlePieces, chordify, chordChildren, titleNodes, chordSymbol, asciiName } from "../../shared/notation";
 import type { ChordKind } from "../../shared/notation";
 import type { KeyDef, TitlePiece } from "../../shared/notation";
-import { Tabs, lockPaint } from "../../shared/ui";
+import { Tabs, lockPaint, StickyHeader, STICKY_CSS } from "../../shared/ui";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -973,7 +973,7 @@ export default function App() {
     + " @keyframes nine-pop{from{opacity:0;transform:translateY(-4px) scale(.96)}to{opacity:1;transform:none}}"
     + " @media (hover:hover){#nine-root .nine-arrow:hover:not(:disabled) svg{opacity:.6}}"
     + " @media (hover:hover){#nine-root .nine-icon:hover svg{opacity:.6}} #nine-root .nine-icon svg{transition:opacity 150ms ease}"
-    + " html,body{overflow-x:hidden!important;max-width:100%} #nine-root{overflow-x:clip;max-width:100vw} #nine-root svg{max-width:100%}";
+    + " html,body{max-width:100%} #nine-root{overflow-x:clip;max-width:100vw} #nine-root svg{max-width:100%}" + STICKY_CSS;
 
   // Play and Settings: in the controls row on the guided steps; on Explore they sit at the top right of the card, so the label tabs get the full width.
   const playToggle = (
@@ -1002,10 +1002,21 @@ export default function App() {
     <div ref={rootRef} id="nine-root" className="nine-root" data-spot={spot !== null ? "1" : "0"} data-guided={guided ? "1" : "0"} style={{ backgroundColor: PAGE, color: INK, colorScheme: "only light", minHeight: "100vh", width: "100%", padding: "12px 16px 16px", fontFamily: SANS, boxSizing: "border-box" }}>
       <style>{css}</style>
       <div style={{ maxWidth: 640, margin: "0 auto", backgroundColor: PAGE, color: INK, display: "flex", flexDirection: "column", gap: 8 }}>
+        <StickyHeader>
         <div className="nine-q nine-quiet" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, backgroundColor: PAGE }}>
           <h1 style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.5px", color: INK, backgroundColor: PAGE, margin: 0 }}>Dominant Pentatonics</h1>
           <a href={SITE_ROOT} style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 12.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE, textDecoration: "none" }}>{"← All lessons"}</a>
         </div>
+        {/* Step chips: progress and navigation in one row. The bar fills up to the current card; tap any chip to jump. */}
+        <nav aria-label="Lesson steps" className="nine-q nine-quiet" style={{ display: "grid", gridTemplateColumns: STEP_LABEL.map((lb: string, i: number) => `minmax(28px,${lb.length + (STEP_LONG[i] ? 4 : 2)}fr)`).join(" "), gap: 3, backgroundColor: PAGE }}>
+          {STEP_LABEL.map((lb: string, i: number) => (
+            <button key={lb} type="button" className="nine-step" aria-label={`Step ${i + 1} of ${total}: ${STEP_LONG[i] ?? lb}`} aria-current={i === card ? "step" : undefined} {...tipOn(`step${i}`)} onClick={() => go(i)} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, height: 32, minWidth: 0, padding: "2px 0", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+              <span style={{ display: "block", height: 4, borderRadius: 2, backgroundColor: i <= card ? TEAL : LINE, transition: "background-color 300ms ease" }} />
+              <span style={{ display: "block", fontFamily: SANS, fontSize: 11, lineHeight: "14px", fontWeight: i === card ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "clip", textAlign: "center", color: i === card ? INK : INK2, backgroundColor: PAGE }}>{STEP_LONG[i] ? <><span className="nine-short">{lb}</span><span className="nine-long">{STEP_LONG[i]}</span></> : lb}</span>
+            </button>
+          ))}
+        </nav>
+        </StickyHeader>
         {/* On every step, so the page never changes height as you move between steps. */}
         <div className={helpOpen ? "nine-q" : "nine-q nine-quiet"} style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, backgroundColor: PAGE }}>
@@ -1023,16 +1034,6 @@ export default function App() {
             </ul>
           ) : null}
         </div>
-
-        {/* Step chips: progress and navigation in one row. The bar fills up to the current card; tap any chip to jump. */}
-        <nav aria-label="Lesson steps" className="nine-q nine-quiet" style={{ display: "grid", gridTemplateColumns: STEP_LABEL.map((lb: string, i: number) => `minmax(28px,${lb.length + (STEP_LONG[i] ? 4 : 2)}fr)`).join(" "), gap: 3, backgroundColor: PAGE }}>
-          {STEP_LABEL.map((lb: string, i: number) => (
-            <button key={lb} type="button" className="nine-step" aria-label={`Step ${i + 1} of ${total}: ${STEP_LONG[i] ?? lb}`} aria-current={i === card ? "step" : undefined} {...tipOn(`step${i}`)} onClick={() => go(i)} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, height: 32, minWidth: 0, padding: "2px 0", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
-              <span style={{ display: "block", height: 4, borderRadius: 2, backgroundColor: i <= card ? TEAL : LINE, transition: "background-color 300ms ease" }} />
-              <span style={{ display: "block", fontFamily: SANS, fontSize: 11, lineHeight: "14px", fontWeight: i === card ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "clip", textAlign: "center", color: i === card ? INK : INK2, backgroundColor: PAGE }}>{STEP_LONG[i] ? <><span className="nine-short">{lb}</span><span className="nine-long">{STEP_LONG[i]}</span></> : lb}</span>
-            </button>
-          ))}
-        </nav>
 
         <div className={C.kind === "explore" ? "nine-card nine-tall" : "nine-card"} style={{ position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", backgroundColor: PAGE }}>
           {!guided ? <div style={{ position: "absolute", top: 0, right: 0, display: "flex", alignItems: "center", gap: 4, zIndex: 1, backgroundColor: PAGE }}>{playToggle}{settingsToggle}</div> : null}
@@ -1110,7 +1111,7 @@ export default function App() {
         <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
           {/* Equal air above the name and between it and the first dot: the board has its own 9px of padding, so the block starts 9px down; a lone name sits 9px lower in the block so the board never moves. */}
           <div style={{ minWidth: 0, marginTop: nameSub ? 0 : 6, backgroundColor: PAGE }}>
-            <div id="nine-name-title" style={{ fontFamily: REALBOOK, fontSize: nameTitle.length > 20 ? 25 : 32, fontWeight: 400, lineHeight: "34px", letterSpacing: 0, color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{titleNodes(nameTitle)}</div>
+            <div id="nine-name-title" style={{ fontFamily: REALBOOK, fontSize: nameTitle.length > 20 ? 25 : 32, fontWeight: 400, lineHeight: "34px", letterSpacing: 0, color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{titleNodes(nameTitle, 1)}</div>
             {nameSub ? <div id="nine-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{nameSub}</div> : null}
           </div>
           <button type="button" className="nine-icon" id="nine-share-quick" aria-label="Share this diagram as an image" onClick={() => { void sharePng(); }} style={{ position: "absolute", right: 0, top: nameSub ? 9 : 18, display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
