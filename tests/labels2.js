@@ -42,8 +42,9 @@ const res=await pg.evaluate(async()=>{
   for(const [em,tg] of toggles){ if(em){click('.nine-card button',em);await S(30);} if(tg) {click('.nine-card button',tg);await S(30);}
    for(const shp of (c<=3?[null]:['1','2','3','4','5'])){ if(shp){btns('[aria-label="Shape"] [role=radio]')[+shp-1].click(); await S(30);}
    for(const mode of ['Intervals','Notes']){
-    for(const [fl,fr] of (mode==='Notes'?[['Note Names',0]]:(tg==='Pentatonic'||tg==='Mixolydian')?[['Intervals',0]]:FR)){
-     click('#nine-labels button',fl);
+    const SC=(tg==='Pentatonic'||tg==='Mixolydian');
+    for(const [fl,fr] of (SC?[[mode==='Notes'?'Note Names':'Intervals',0]]:(mode==='Notes'?[['C9',0]]:FR))){
+     if(SC) click('#nine-labels button',fl); else { click('#nine-show-explore button',mode==='Notes'?'Names':'Intervals'); click('#nine-from button',fl); }
      await S(40);
      const quiz=false;
      if(quiz){ for(const g of document.querySelectorAll('#nine-board g[data-vis="1"]')) if(!g.querySelector('text').textContent){ g.dispatchEvent(new MouseEvent('click',{bubbles:true})); await S(8);} await S(40);}
@@ -63,7 +64,7 @@ const res=await pg.evaluate(async()=>{
      legChecks++;
      if(c===6){ nameChecks++; const h2=document.querySelector('.nine-card h2').textContent; if(!new RegExp(BASE+'( no root|/[A-G][♭♯]?)?$').test(h2)) fails.push(`name card6 ${tg} ${fl}: ${h2}`);}
      if(c===7&&mode==='Intervals'&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; const ti=document.getElementById('nine-name-title').textContent, su=document.getElementById('nine-name-sub').textContent; if(!new RegExp('^'+BASE+'( Rootless|/[A-G][♭♯]?)?$').test(ti)||su!==tg) fails.push(`name ${tg} ${fl}: ${ti} / ${su}`);}
-     const gl=document.querySelector('#nine-labels [aria-checked=true]').textContent;
+     const gl=document.querySelector(SC?'#nine-labels [aria-checked=true]':'#nine-from [aria-checked=true]').textContent;
      if(gl!==fl) fails.push(`global frame card${c+1} shows ${gl} want ${fl}`);
     }}}}
  }

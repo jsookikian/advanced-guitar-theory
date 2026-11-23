@@ -191,7 +191,7 @@ function look(dot: Dot, step: Step, drop2: Set<string>, ringDeg: number, plain9:
   if (dot.d === ringDeg) { L.fill = PAGE; L.stroke = INK; L.text = INK; L.sw = 2.5; }
   else if (!plain9 && dot.d === 2 && step >= 2 && step <= 3) { L.fill = TEAL; L.stroke = TEAL; L.text = "#ffffff"; }
   if (step === 4) {
-    if (drop2.has(`${dot.s}-${dot.f}`)) { L.fill = TEAL; L.stroke = TEAL; L.text = "#ffffff"; L.sw = 0; L.dashed = false; }
+    if (drop2.has(`${dot.s}-${dot.f}`)) { const c = plain9 ? INK : TEAL; L.fill = c; L.stroke = c; L.text = "#ffffff"; L.sw = 0; L.dashed = false; }
     else { L.dotOp = 0.18; L.textOp = 0.35; }
   }
   // The root of the active frame is always a filled red R.
@@ -404,11 +404,11 @@ function Seg(props: { options: { value: string; label: string }[]; value: string
 }
 
 // Quiet tabs for Explore's pickers: no boxes, no fills; the chosen one is dark, bold and underlined, the rest are grey text on a hairline.
-function Tabs(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; weights?: number[]; className?: string; label: string; wrap?: boolean; size?: number }) {
+function Tabs(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; weights?: number[]; className?: string; label: string; wrap?: boolean; size?: number; height?: number }) {
   const { options, value, onChange } = props;
   const w = props.weights && props.weights.length === options.length ? props.weights : options.map(() => 1);
   return (
-    <div role="radiogroup" aria-label={props.label} className={props.className} style={{ display: "grid", gridTemplateColumns: w.map((x: number) => `minmax(0, ${x}fr)`).join(" "), height: 34, borderBottom: `1px solid ${LINE}`, backgroundColor: PAGE, boxSizing: "border-box" }}>
+    <div role="radiogroup" aria-label={props.label} className={props.className} style={{ display: "grid", gridTemplateColumns: w.map((x: number) => `minmax(0, ${x}fr)`).join(" "), height: props.height ?? 34, borderBottom: `1px solid ${LINE}`, backgroundColor: PAGE, boxSizing: "border-box" }}>
       {options.map((o: { value: string; label: string }) => {
         const on = o.value === value;
         return (
@@ -527,7 +527,7 @@ const TUT_STEPS: TutStep[] = [
   { at: [2, 2], sel: ".nine-card p button[aria-pressed]", title: "Chord names are buttons", text: "A chord name with a dotted underline is a button. Tap it to count the board's intervals from that chord, and tap it again to go back." },
   { at: [7, 0], live: true, sel: "#nine-shape", title: "Explore: the five shapes", text: "The last step opens the whole neck. Pick one of the five shapes. The \u2212 and + under the board\u2019s arrows move it an octave down or up." },
   { at: [7, 0], live: true, sel: "#nine-scroll, #nine-board", title: "Walk the neck", text: "Swipe or scroll the neck, or use the arrows at its edges, to move up and down the shapes." },
-  { at: [7, 0], live: true, sel: "#nine-labels", title: "Label the dots", text: "Note Names shows the notes; Intervals counts them from the root. On the chord layers you can count from the rootless dominant 9, the half-diminished or the minor 6 instead: same notes, three names." },
+  { at: [7, 0], live: true, sel: "#nine-labels", title: "Label the dots", text: "On the chord layers, the tabs pick which chord the notes belong to: the rootless dominant 9, the half-diminished or the minor 6 (same notes, three names). The small switch at the right shows note names or intervals counted from that chord." },
   { at: [7, 0], live: true, sel: "#nine-name", title: "What you are looking at", text: "The chord, or the scale on the Pentatonic and Mixolydian layers. A Drop voicing adds its name underneath. The arrow at the right shares the diagram as an image." },
   { at: [7, 0], live: true, sel: "#nine-play", title: "Play", text: "Plays the notes of the shape from low to high. Tap again to stop." },
 ];
@@ -752,7 +752,7 @@ export default function App() {
   const scaleLayer = layerMode === "penta" || layerMode === "mixo";
   const layerSeg = () => tabsBtn("Layer", [{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => { setLayerMode(v); if (v === "penta" || v === "mixo") setFrame("0"); }, [9, 10, 10, 7, 7], "nine-layers");
 
-  const tabsBtn = (label: string, o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string, wrap?: boolean, size?: number) => <Tabs label={label} options={o} value={v} onChange={on} weights={weights} className={className} wrap={wrap} size={size} />;
+  const tabsBtn = (label: string, o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string, wrap?: boolean, size?: number, height?: number) => <Tabs label={label} options={o} value={v} onChange={on} weights={weights} className={className} wrap={wrap} size={size} height={height} />;
   const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Seg options={o} value={v} onChange={on} weights={weights} className={className} />;
   const ink = spot !== null ? "rgba(77,53,51,0.2)" : INK;
   const head = (t: string, extra?: string) => (
@@ -970,7 +970,7 @@ export default function App() {
     const file = new File([blob], shareName, { type: "image/png" });
     const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
     if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
-      try { await nav.share({ files: [file], title: shareTitle }); return; } catch (e) { if ((e as Error).name === "AbortError") return; }
+      try { await nav.share({ files: [file] }); return; } catch (e) { if ((e as Error).name === "AbortError") return; }
     }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -1109,7 +1109,7 @@ export default function App() {
           <div key={`card${card}-${beat}`} style={{ display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
         </div>
 
-        <div className="nine-q" style={{ minHeight: 34, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
+        <div className="nine-q" style={{ minHeight: guided ? 34 : 42, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
           {guided ? (<>
           <div style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }} />
             <div role="radiogroup" id="nine-show" aria-label="Show intervals or note names" className="nine-q" style={{ display: "inline-flex", flex: "0 0 auto", height: 24, border: `1px solid ${LINE_UI}`, borderRadius: 12, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
@@ -1121,8 +1121,15 @@ export default function App() {
             {/* Explore: one control says how the dots are labelled: note names, or intervals counted from the rootless C9, the Eø or the Gm6 (the same four notes, three names). */}
             <div id="nine-labels" aria-label="Label the dots" style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }}>
               {scaleLayer
-                ? tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: "Intervals" }], show === "notes" ? "notes" : "0", (v: string) => { setShow(v === "notes" ? "notes" : "intervals"); setFrame("0"); }, [1, 1], undefined, false, 12.5)
-                : tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], show === "notes" ? "notes" : frame, (v: string) => { if (v === "notes") { setShow("notes"); setFrame("0"); } else { setShow("intervals"); setFrame(v); } }, [1, 1, 1, 1], undefined, false, 12.5)}
+                ? tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: "Intervals" }], show === "notes" ? "notes" : "0", (v: string) => { setShow(v === "notes" ? "notes" : "intervals"); setFrame("0"); }, [1, 1], undefined, false, 12.5, 42)
+                : (<div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, backgroundColor: PAGE }}>
+                  <div id="nine-from" style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }}>{tabsBtn("Count from", [{ value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], frame, (v: string) => setFrame(v), [1, 1, 1], undefined, false, 12.5, 42)}</div>
+                  <div role="radiogroup" id="nine-show-explore" aria-label="Label the dots" style={{ flex: "0 0 auto", display: "inline-flex", flexDirection: "column", border: `1px solid ${LINE_UI}`, borderRadius: 9, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
+                    {[["notes", "Names"], ["intervals", "Intervals"]].map(([v, lb]: string[]) => (
+                      <button key={v} type="button" role="radio" aria-checked={show === v} onClick={() => setShow(v)} style={{ height: 21, padding: "0 10px", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "21px", color: show === v ? PAGE : INK, backgroundColor: show === v ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease" }}>{lb}</button>
+                    ))}
+                  </div>
+                </div>)}
             </div>
           </>)}
             {guided ? settingsToggle : null}
