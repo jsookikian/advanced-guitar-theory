@@ -37,7 +37,7 @@ let url;
       if (Math.abs(t.off) > 30) F(W + ' arrow ' + i + ' off-centre by ' + t.off + ' shape ' + t.shape);
     }
     // Shape button re-centres too.
-    await pg.evaluate(() => [...document.querySelectorAll('[aria-label="Shape"] button')][0].click()); await S(1000);
+    await pg.evaluate(() => [...document.querySelectorAll('[aria-label="Shape"] [role=radio]')][0].click()); await S(1000);
     const sb = await m(); if (Math.abs(sb.off) > 30) F(W + ' shape button off-centre by ' + sb.off);
     // Fit all.
     await pg.evaluate(() => document.querySelector('.nine-icon[aria-label="Display settings"]').click()); await S(400);

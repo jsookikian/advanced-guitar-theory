@@ -7,7 +7,7 @@ for(const W of [320,390,1280]){await pg.setViewport({width:W,height:844,deviceSc
  for(const i of [0,2,6]) out.push(await info(`nav button:nth-child(${i+1})`));
  out.push(await info('.nine-arrow[aria-label^="Prev"]'));out.push(await info('.nine-arrow[aria-label^="Next"]'));
  out.push(await info('.nine-icon[aria-label^="Share"]'));out.push(await info('.nine-icon[aria-label="Display settings"]'));
- out.push(await info('[aria-label="Shape"] button:nth-child(2)'));
+ out.push(await info('[aria-label="Shape"] [role=radio]:nth-child(2)'));
  await pg.mouse.move(5,830);await S(150);out.push('after leave: '+await pg.evaluate(()=>!!document.getElementById('nine-tip')));
  console.log(W);out.forEach(x=>console.log('  '+x));
  if(W===390){await pg.hover('nav button:nth-child(3)');await S(200);await pg.screenshot({path:'lesson_390_tooltip.png',clip:{x:0,y:0,width:390,height:200},captureBeyondViewport:false});
