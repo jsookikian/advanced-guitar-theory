@@ -116,4 +116,6 @@ Each item is a request from Jordan, then what was done.
 - Mixolydian step assumes the scale is known (5 beats: add the 4 and 6, the 6/13 colour tone, the avoid note, where it lands x2). Hear it plays the 4 and 6 on the first beat. Mixolydian is listed in "Helps to know".
 - Tutorial: `Tutorial.tsx` is a coach-mark tour (12 steps, `TUT_STEPS` in `lesson.tsx`). It opens once on a first visit (localStorage `agt-dominant-pentatonics-tutorial-seen`; never under automation), from "Show tutorial" under the title on step 1, and from Settings. "Live" steps let taps reach the lit control and keep the card off the board.
 - Synonym chord names (Eø, Gm6, C9) are buttons that set Count from to that chord.
+- Rule: every note name and interval in running text is a circle, roots red (`src/shared/pip.tsx`, `pipify`; what counts is `src/shared/tokens.json`; `[x]` forces a circle). `tests/circles.js` walks every beat, Helps to know and every tutorial step and fails on plain-text ones. Exempt: chord/scale names (bold, headings), the step chips, form controls such as the Key select.
+- Tutorial note sits beside what it lights (only the sentence step keeps clear of the board); spotlight and note glide between steps and crossfade.
 

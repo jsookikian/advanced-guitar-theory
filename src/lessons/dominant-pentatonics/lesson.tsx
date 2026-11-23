@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "grok/canvas";
 import type { CSSProperties, ChangeEvent, ReactNode } from "grok/canvas";
 import { pluck, playPhrase, stopAll, setInstrument, INSTRUMENTS } from "../../shared/audio";
 import type { InstrumentId } from "../../shared/audio";
+import { pipify } from "../../shared/pip";
 import Tutorial from "./Tutorial";
 import type { TutStep } from "./Tutorial";
 
@@ -473,9 +474,9 @@ function homeIndex(list: Pos[]): number {
 const TUT_SEEN = "agt-dominant-pentatonics-tutorial-seen";
 const TUT_STEPS: TutStep[] = [
   { at: [0, 0], live: true, sel: "#nine-board", title: "The fretboard", text: "Six strings, frets 1 to 7. Every dot is a note of the chord or scale. Tap any dot to hear it." },
-  { at: [0, 0], live: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. The note and interval circles in the text are buttons: tap one to spotlight that note on the board and hear it." },
+  { at: [0, 0], live: true, keepBoard: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board. Tap one to spotlight that note on the board and hear it." },
   { at: [0, 0], live: true, sel: "#nine-hear", title: "Hear it", text: "Plays what is lit on the board, so you hear exactly what the sentence is about." },
-  { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals (R, 3, 5, b7) and note names (C, E, G, Bb)." },
+  { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals ([R] [3] [5] [b7]) and note names ([C] [E] [G] [Bb]). The root is always red." },
   { at: [0, 0], sel: 'button[aria-label="Display settings"]', title: "Settings", text: "Count from, Key, Left-handed, Sound, Neck and Share image live here. Count from changes which note the intervals are measured from." },
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "The lesson has eight steps. Tap any one to jump straight to it." },
   { at: [0, 0], sel: "#nine-name + div", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
@@ -770,7 +771,7 @@ export default function App() {
       ] };
       default: return { head: "Play it as a chord.", beats: [
         { text: <>Play four of the notes together: Drop 2. That is <Syn d={4}>{III}{"\u00f8"}</Syn> on the top four strings, or <Syn d={0}>{I}9</Syn> without its root.</>, name: dr(cur.drop, "Drop 2") },
-        { text: <>Drop 3: move the top note down to the low E. New bass, new name.</>, name: dr(cur.drop3, "Drop 3") },
+        { text: <>Drop 3: move the top note down to the low {chip(4)} string. New bass, new name.</>, name: dr(cur.drop3, "Drop 3") },
         { text: <>Your turn: play the <Syn d={4}>{III}{"\u00f8"}</Syn> arpeggio over <B>{I}7</B>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${III}\u00f8` },
       ] };
     }
@@ -785,14 +786,14 @@ export default function App() {
   let body: ReactNode = null;
   if (content && cb) body = <>{beatDots}{head(content.head)}{line(cb.text)}</>;
   else body = (
-    <>{head("Explore the neck.")}{line(cagedLine)}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
+    <>{head("Explore the neck.")}{line(pipify(cagedLine, { root: I }))}<div style={{ marginTop: 4 }}>{layerSeg()}</div></>
   );
 
   const legendSpec: { kind: KeyKind; text: string }[] = [];
   if (shown.some((d: Dot) => d.d === ringDeg)) legendSpec.push({ kind: "root", text: `R = root (${n(ringDeg)})` });
   if (mode === "chord") legendSpec.push({ kind: "fill", text: "chord tones" });
   if (mode === "arp" || mode === "penta" || mode === "mixo") legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 (${n(2)})` : `${n(2)}, the 9 of ${I}` });
-  if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `4 and 13 (${n(5)} ${n(9)})` : `${n(5)} ${n(9)}, the 4 and 13 of ${I}` });
+  if (mode === "mixo") legendSpec.push({ kind: "dash", text: eff === 0 ? `[4] and [6] ([${n(5)}] [${n(9)}])` : `${n(5)} ${n(9)}, the [4] and [6] of ${I}` });
   if (mode === "grip") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 2" : `Drop 2 \u00b7 ${vname(cur.drop)}` });
   if (mode === "drop3") legendSpec.push({ kind: "teal", text: C.kind === "voicing" ? "Drop 3" : `Drop 3 \u00b7 ${vname(cur.drop3)}` });
   if (guided && C.kind !== "names") {
@@ -801,7 +802,7 @@ export default function App() {
     else if (C.kind === "lose") legendSpec.push({ kind: "fill", text: `kept: ${III} ${V} ${n(10)}` });
     else legendSpec.push({ kind: "teal", text: eff === 0 ? `the 9 (${n(2)})` : `${n(2)}, the 9 of ${I}` }, { kind: "fill", text: `${III} ${V} ${n(10)}` });
   }
-  const legend: ReactNode[] = legendSpec.map((it: { kind: KeyKind; text: string }) => <Key key={it.kind + it.text} kind={it.kind}>{it.text}</Key>);
+  const legend: ReactNode[] = legendSpec.map((it: { kind: KeyKind; text: string }) => <Key key={it.kind + it.text} kind={it.kind}>{pipify(it.text, { root: n(ringDeg), ninth: n(2) })}</Key>);
 
   // Share: draw the current diagram onto a 1080x1080 paper-white PNG, then hand it to the share sheet (or download it).
   const LAYER_NAME: Record<Mode, string> = { chord: "Chord tones", arp: "Arpeggio", penta: "Pentatonic", mixo: "Mixolydian", grip: "Drop 2", drop3: "Drop 3" };
@@ -841,7 +842,8 @@ export default function App() {
     let x = M;
     y += 58;
     legendSpec.forEach((it: { kind: KeyKind; text: string }) => {
-      const w = 30 + ctx.measureText(it.text).width;
+      const label = it.text.replace(/[\[\]]/g, "");
+      const w = 30 + ctx.measureText(label).width;
       if (x > M && x + w > S - M) { x = M; y += 40; }
       ctx.beginPath();
       ctx.arc(x + 11, y - 9, 11, 0, Math.PI * 2);
@@ -852,7 +854,7 @@ export default function App() {
       ctx.setLineDash([]);
       if (it.kind === "root") { ctx.fillStyle = "#ffffff"; ctx.font = `700 14px ${SANS}`; ctx.textAlign = "center"; ctx.fillText("R", x + 11, y - 4); ctx.textAlign = "left"; ctx.font = `400 26px ${SANS}`; }
       ctx.fillStyle = INK2;
-      ctx.fillText(it.text, x + 30, y);
+      ctx.fillText(label, x + 30, y);
       x += w + 36;
     });
     // The board: a static copy of the live SVG at its final state (no fades, no animations).

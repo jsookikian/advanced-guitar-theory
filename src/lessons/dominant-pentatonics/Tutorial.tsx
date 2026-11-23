@@ -1,16 +1,19 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "grok/canvas";
 import type { CSSProperties } from "grok/canvas";
+import { pipify } from "../../shared/pip";
 
 // A coach-mark tour of the lesson's controls: one spotlight on one control at a time, with a short note and Back / Next.
 // Each step names a CSS selector for what to light and, when the control only exists on another card, where to go first (`at`).
+// `keepBoard` steps (the sentence whose circles light the board) put the note wherever it does not cover the board; every other step puts it right beside what it lights.
 // `live` steps let taps through to the lit control (so "tap a dot" really plays it); every other step blocks the page behind the note.
-export interface TutStep { sel: string; title: string; text: string; at?: [number, number]; live?: boolean }
+export interface TutStep { sel: string; title: string; text: string; at?: [number, number]; live?: boolean; keepBoard?: boolean }
 
 const INK = "#4d3533";
 const INK2 = "#806a68";
 const PAGE = "#fdfcfb";
 const LINE_UI = "#b9aeac";
 const SERIF = "Aime, Georgia, serif";
+const EASE = "cubic-bezier(.45,.05,.25,1)";
 const SANS = "'KMR Melange Grotesk', -apple-system, 'Helvetica Neue', Arial, sans-serif";
 
 interface Box { top: number; left: number; width: number; height: number }
@@ -33,8 +36,7 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
   // On every step: go to the card the control lives on, wait for it to exist, bring it into view, then measure it
   // (once at once, once after the card's slide-in has settled).
   useEffect(() => {
-    setBox(null);
-    onStep(step);
+    onStep(step); // the old spotlight stays until the new one is measured, so it glides instead of blinking out
     let alive = true;
     const timers: number[] = [];
     const measure = (): void => {
@@ -48,7 +50,8 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
       if (!alive) return;
       const el = document.querySelector(step.sel);
       if (!el) { if (tries++ < 20) timers.push(window.setTimeout(find, 100)); return; }
-      el.scrollIntoView({ block: "center" });
+      const r = el.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "center" });
       measure();
       timers.push(window.setTimeout(measure, 450));
     };
@@ -58,7 +61,7 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
     return () => { alive = false; timers.forEach((t: number) => window.clearTimeout(t)); window.removeEventListener("resize", measure); window.removeEventListener("scroll", measure, true); };
   }, [i]);
 
-  // Put the note below the lit control, or above it when there is no room; never off screen. On a live step the board has to stay
+  // Put the note right below the lit control, or above it when there is no room; never off screen. On a keepBoard step the board has to stay
   // in view (tapping a note lights it there), so the note goes wherever it does not cover the board.
   useLayoutEffect(() => {
     const h = cardRef.current ? cardRef.current.offsetHeight : 0;
@@ -68,7 +71,7 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
     const br = bd ? bd.getBoundingClientRect() : null;
     const clear = (t: number): boolean => t >= 8 && t + h <= vh - 8 && (!br || t + h < br.top - 8 || t > br.bottom + 8);
     let t = box.top + box.height + 18;
-    if (step.live && br) {
+    if (step.keepBoard && br) {
       const bottom = vh - h - 12;
       const top = 12;
       t = clear(bottom) ? bottom : clear(top) ? top : t;
@@ -89,7 +92,8 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
   }, [last]);
 
     return (
-    <div role="dialog" aria-modal="true" aria-label="Tutorial" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, pointerEvents: "none", backgroundColor: box ? "transparent" : "rgba(40,25,24,0.55)" }}>
+    <div role="dialog" aria-modal="true" aria-label="Tutorial" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, pointerEvents: "none", backgroundColor: box ? "transparent" : "rgba(40,25,24,0.55)", animation: `tut-fade 260ms ${EASE} both` }}>
+      <style>{"@keyframes tut-fade{from{opacity:0}to{opacity:1}} @keyframes tut-swap{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}} @media (prefers-reduced-motion:reduce){[role=dialog],[role=dialog] *{animation:none!important;transition:none!important}}"}</style>
       {/* Click shield: the whole page, or (on a live step) everything around the lit control. */}
       {!box || !step.live ? (
         <div aria-hidden="true" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "auto", backgroundColor: "transparent" }} />
@@ -104,12 +108,14 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
         </>
       )}
       {box ? (
-        <div aria-hidden="true" style={{ position: "fixed", top: box.top - pad, left: box.left - pad, width: box.width + pad * 2, height: box.height + pad * 2, borderRadius: 12, boxShadow: "0 0 0 9999px rgba(40,25,24,0.55)", border: `2px solid ${PAGE}`, boxSizing: "border-box", pointerEvents: "none", transition: "top 220ms ease, left 220ms ease, width 220ms ease, height 220ms ease" }} />
+        <div aria-hidden="true" style={{ position: "fixed", top: box.top - pad, left: box.left - pad, width: box.width + pad * 2, height: box.height + pad * 2, borderRadius: 12, boxShadow: "0 0 0 9999px rgba(40,25,24,0.55)", border: `2px solid ${PAGE}`, boxSizing: "border-box", pointerEvents: "none", transition: `top 320ms ${EASE}, left 320ms ${EASE}, width 320ms ${EASE}, height 320ms ${EASE}`, animation: `tut-fade 260ms ${EASE} both` }} />
       ) : null}
-      <div ref={cardRef} style={{ position: "fixed", pointerEvents: "auto", top: cardTop, left: "50%", transform: "translateX(-50%)", width: "min(340px, calc(100vw - 24px))", boxSizing: "border-box", padding: "14px 16px 12px", borderRadius: 14, border: `1px solid ${LINE_UI}`, backgroundColor: PAGE, color: INK, boxShadow: "0 8px 28px rgba(40,25,24,0.28)", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div ref={cardRef} style={{ position: "fixed", pointerEvents: "auto", opacity: box ? 1 : 0, transition: `top 320ms ${EASE}, opacity 260ms ${EASE}`, top: cardTop, left: "50%", transform: "translateX(-50%)", width: "min(340px, calc(100vw - 24px))", boxSizing: "border-box", padding: "14px 16px 12px", borderRadius: 14, border: `1px solid ${LINE_UI}`, backgroundColor: PAGE, color: INK, boxShadow: "0 8px 28px rgba(40,25,24,0.28)", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6, backgroundColor: PAGE, animation: `tut-swap 260ms ${EASE} both` }}>
         <div style={{ fontFamily: SANS, fontSize: 11.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{`${i + 1} of ${steps.length}`}</div>
         <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: 20, fontWeight: 400, lineHeight: "24px", letterSpacing: "-0.4px", color: INK, backgroundColor: PAGE }}>{step.title}</h2>
-        <p style={{ margin: 0, fontFamily: SANS, fontSize: 14, fontWeight: 350, lineHeight: "20px", color: INK, backgroundColor: PAGE }}>{step.text}</p>
+        <p style={{ margin: 0, fontFamily: SANS, fontSize: 14, fontWeight: 350, lineHeight: "20px", color: INK, backgroundColor: PAGE }}>{pipify(step.text, { root: "C" })}</p>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, backgroundColor: PAGE }}>
           <button type="button" onClick={() => onClose(false)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 13, color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{last ? "Close" : "Skip"}</button>
           <span style={{ flex: 1 }} />
