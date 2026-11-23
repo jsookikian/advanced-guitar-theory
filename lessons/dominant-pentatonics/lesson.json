@@ -20,5 +20,12 @@
       "topic": "chord synonyms (Eø = G-6, A-7 = C6)",
       "why": "One set of notes, several names."
     }
-  ]
+  ],
+  "card": {
+    "title": "Dominant Pentatonics",
+    "subtitle": "The 9 approach: one shape, three names",
+    "rootless": true,
+    "set": 1,
+    "inv": 0
+  }
 }

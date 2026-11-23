@@ -7,6 +7,28 @@ import { build } from "esbuild";
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const dev = process.argv.includes("--dev");
+// Crawlers (iMessage, Slack, X, Facebook, LinkedIn) need absolute URLs for the link preview, so every og/twitter URL is built from SITE_URL.
+// Default: the GitHub Pages site. The Forma copy builds with SITE_URL=https://advanced-guitar-theory.tryforma.com/ (runtime asset paths still use SITE_ROOT).
+const SITE_URL = (process.env.SITE_URL || "https://jsookikian.github.io/advanced-guitar-theory/").replace(/\/?$/, "/");
+const SITE_NAME = "Advanced Guitar Theory";
+const CATALOG_DESC = "Short, interactive fretboard lessons for players who already know their pentatonics.";
+// Link-preview metadata for one page: Open Graph + Twitter card, the share card image (1200x630) and the favicon.
+const ogMeta = (o) => `<meta name="description" content="${esc(o.desc)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="${esc(SITE_NAME)}">
+<meta property="og:title" content="${esc(o.title)}">
+<meta property="og:description" content="${esc(o.desc)}">
+<meta property="og:url" content="${esc(SITE_URL + o.path)}">
+<meta property="og:image" content="${esc(SITE_URL + o.image)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${esc(o.alt)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(o.title)}">
+<meta name="twitter:description" content="${esc(o.desc)}">
+<meta name="twitter:image" content="${esc(SITE_URL + o.image)}">
+<meta name="twitter:image:alt" content="${esc(o.alt)}">
+<link rel="icon" type="image/svg+xml" href="${esc(SITE_URL)}favicon.svg">`;
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ids = readdirSync("src/lessons", { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(`src/lessons/${d.name}/main.tsx`)).map((d) => d.name);
 
@@ -33,7 +55,7 @@ for (const id of ids) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="only light">
-<link rel="icon" href="data:,">
+${ogMeta({ title: meta.title, desc: meta.summary, path: `lessons/${id}/index.html`, image: `lessons/${id}/share.png`, alt: `${meta.title}: a fretboard diagram` })}
 <title>${esc(meta.title)}</title>
 </head>
 <body style="margin:0;background:#fdfcfb">
@@ -53,7 +75,7 @@ writeFileSync("index.html", `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="only light">
-<link rel="icon" href="data:,">
+${ogMeta({ title: SITE_NAME, desc: CATALOG_DESC, path: "", image: "share.png", alt: "Advanced Guitar Theory: a Drop 2 chord on the fretboard" })}
 <title>Advanced Guitar Theory</title>
 <style>
 :root{color-scheme:only light}
