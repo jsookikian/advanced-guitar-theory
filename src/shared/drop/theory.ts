@@ -1,5 +1,5 @@
-import { LETTERS, NATURAL, chordSymbol, simpleBass } from "../../shared/notation";
-import type { ChordKind } from "../../shared/notation";
+import { LETTERS, NATURAL, chordSymbol, simpleBass } from "../notation";
+import type { ChordKind } from "../notation";
 
 // Pure music theory for the Drop 2 lesson: spelling, chord qualities and the voicings, all computed from the key.
 // A chord root is a letter and a pitch class (so a ii or V chord can be spelled from its own letter).
@@ -52,6 +52,31 @@ export const toneIv = (q: Quality, t: number): string => ivAt(q.ls[t], q.offs[t]
 // Drop 2: stack the chord close (four notes within an octave), then drop the second note from the top by an octave.
 // The four voicings are named by their lowest note. Each list is the chord tone (0 root, 1 third, 2 fifth, 3 seventh) of the voice from the bass up.
 export const ORDER: number[][] = [[0, 2, 3, 1], [1, 3, 0, 2], [2, 0, 1, 3], [3, 1, 2, 0]];
+// Drop 3 drops the THIRD note from the top of the close chord, so the bass is followed by a silent string. Bass-up chord tones per inversion:
+// root R 7 3 5, 1st 3 R 5 7, 2nd 5 3 7 R, 3rd 7 5 R 3.
+export const ORDER3: number[][] = [[0, 3, 1, 2], [1, 0, 2, 3], [2, 1, 3, 0], [3, 2, 0, 1]];
+
+// What differs between the drops: which notes are voiced in what order, which string sets exist, and on which strings the voices sit in each
+// picture (close chord / the dropped note has landed / the finished chord). `stepVoice` is the voice that steps across to the free string.
+export interface DropType {
+  id: "drop2" | "drop3";
+  order: number[][];
+  sets: number[];
+  final: (set: number) => number[];
+  closed: (set: number) => number[];
+  skip: (set: number) => number[];
+  stepVoice: number;
+  // How many notes from the top of the close chord the dropped one is (2 or 3), and what the learner reads.
+  fromTop: number;
+}
+export const DROP2: DropType = {
+  id: "drop2", order: ORDER, sets: [0, 1, 2], stepVoice: 3, fromTop: 2,
+  final: (s: number) => [s, s + 1, s + 2, s + 3], closed: (s: number) => [s + 3, s + 1, s + 2, s + 4], skip: (s: number) => [s, s + 1, s + 2, s + 4],
+};
+export const DROP3: DropType = {
+  id: "drop3", order: ORDER3, sets: [0, 1], stepVoice: 1, fromTop: 3,
+  final: (s: number) => [s, s + 2, s + 3, s + 4], closed: (s: number) => [s + 2, s + 1, s + 3, s + 4], skip: (s: number) => [s, s + 1, s + 3, s + 4],
+};
 export const INV_NAMES = ["Root position", "1st inversion", "2nd inversion", "3rd inversion"];
 // The close-position chord each voicing comes from, low to high: the dropped note is the second from the top.
 export const CLOSE: number[][] = [[2, 3, 0, 1], [3, 0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 0]];
@@ -64,11 +89,11 @@ const REF = QUALITIES[0].offs;
 export interface Placed { frets: number[]; pitches: number[]; strings: number[] }
 // A Drop 2 chord placed on four neighbouring strings. `ref` is its pitches as a major 7th; every other quality moves single notes
 // from those (a tone one semitone lower is one fret lower), which keeps the unchanged notes exactly where they are.
-export interface Inst { ref: number[]; set: number; inv: number }
+export interface Inst { ref: number[]; set: number; inv: number; dt: DropType }
 export function place(inst: Inst, q: Quality): Placed {
-  const order = ORDER[inst.inv];
+  const order = inst.dt.order[inst.inv];
   const pitches = inst.ref.map((p: number, j: number) => p + q.offs[order[j]] - REF[order[j]]);
-  const strings = [0, 1, 2, 3].map((j: number) => inst.set + j);
+  const strings = inst.dt.final(inst.set);
   return { pitches, strings, frets: pitches.map((p: number, j: number) => p - OPEN_MIDI[strings[j]]) };
 }
 function valid(inst: Inst): boolean {
@@ -80,8 +105,8 @@ function valid(inst: Inst): boolean {
   });
 }
 // Every place on the neck where this Drop 2 chord (this inversion, on this string set) fits, from the nut up.
-export function instances(root: RootDef, set: number, inv: number): Inst[] {
-  const order = ORDER[inv];
+export function instances(root: RootDef, set: number, inv: number, dt: DropType = DROP2): Inst[] {
+  const order = dt.order[inv];
   const out: Inst[] = [];
   for (let f0 = 0; f0 <= MAXF; f0++) {
     const p0 = OPEN_MIDI[set] + f0;
@@ -92,7 +117,7 @@ export function instances(root: RootDef, set: number, inv: number): Inst[] {
       while (p % 12 !== (root.pc + REF[order[j]]) % 12) p++;
       ref.push(p);
     }
-    const inst = { ref, set, inv };
+    const inst: Inst = { ref, set, inv, dt };
     if (valid(inst)) out.push(inst);
   }
   return out;
@@ -102,7 +127,7 @@ export function home(list: Inst[]): number {
   const i = list.findIndex((x: Inst) => QUALITIES.every((q: Quality) => Math.min(...place(x, q).frets) >= 1));
   return i >= 0 ? i : 0;
 }
-export const rootStringFret = (inst: Inst, q: Quality): number => place(inst, q).frets[ORDER[inst.inv].indexOf(0)];
+export const rootStringFret = (inst: Inst, q: Quality): number => place(inst, q).frets[inst.dt.order[inst.inv].indexOf(0)];
 
 // The three pictures of "closed, then drop". Each lists the four voices by chord tone (0 root, 1 third, 2 fifth, 3 seventh or sixth).
 //  closed: the chord stacked close (four notes within an octave) on four neighbouring strings, one string above the Drop 2 set.
@@ -111,18 +136,12 @@ export const rootStringFret = (inst: Inst, q: Quality): number => place(inst, q)
 export type View = "closed" | "skip" | "drop";
 export interface VV { s: number; f: number; tone: number; pitch: number }
 export function viewVoices(inst: Inst, q: Quality, view: View): VV[] | null {
-  const order = ORDER[inst.inv];
+  const dt = inst.dt;
+  const order = dt.order[inst.inv];
   const P = place(inst, q).pitches;
-  const set = inst.set;
-  let raw: { tone: number; s: number; pitch: number }[];
-  if (view === "drop") raw = [0, 1, 2, 3].map((j: number) => ({ tone: order[j], s: set + j, pitch: P[j] }));
-  else {
-    if (set + 4 > 5) return null;
-    raw = view === "closed"
-      ? [{ tone: order[1], s: set + 1, pitch: P[1] }, { tone: order[2], s: set + 2, pitch: P[2] }, { tone: order[0], s: set + 3, pitch: P[0] + 12 }, { tone: order[3], s: set + 4, pitch: P[3] }]
-      : [{ tone: order[0], s: set, pitch: P[0] }, { tone: order[1], s: set + 1, pitch: P[1] }, { tone: order[2], s: set + 2, pitch: P[2] }, { tone: order[3], s: set + 4, pitch: P[3] }];
-  }
-  const out = raw.map((r: { tone: number; s: number; pitch: number }) => ({ ...r, f: r.pitch - OPEN_MIDI[r.s] }));
+  const strs = view === "closed" ? dt.closed(inst.set) : view === "skip" ? dt.skip(inst.set) : dt.final(inst.set);
+  if (strs.some((x: number) => x > 5)) return null;
+  const out = P.map((p: number, j: number) => { const pitch = view === "closed" && j === 0 ? p + 12 : p; return { tone: order[j], s: strs[j], pitch, f: pitch - OPEN_MIDI[strs[j]] }; });
   if (out.some((v: VV) => v.f < 0 || v.f > MAXF)) return null;
   return out.sort((a: VV, b: VV) => a.tone - b.tone);
 }
@@ -149,7 +168,7 @@ export function homeFor(list: Inst[], qs: Quality[], views: View[]): number {
 
 // ii - V - I in a key, all on one string set: the three voicings whose notes move the least between chords.
 export interface ProgChord { root: RootDef; q: Quality; inst: Inst }
-export function progression(k: RootDef, set: number): ProgChord[] {
+export function progression(k: RootDef, set: number, dt: DropType = DROP2): ProgChord[] {
   const chords = [
     { root: { pc: (k.pc + 2) % 12, letter: (k.letter + 1) % 7 }, q: Q("m7") },
     { root: { pc: (k.pc + 7) % 12, letter: (k.letter + 4) % 7 }, q: Q("dom7") },
@@ -157,7 +176,7 @@ export function progression(k: RootDef, set: number): ProgChord[] {
   ];
   const cands = chords.map((c: { root: RootDef; q: Quality }) => {
     const out: ProgChord[] = [];
-    for (let inv = 0; inv < 4; inv++) instances(c.root, set, inv).forEach((inst: Inst) => { const lo = Math.min(...place(inst, c.q).frets); if (lo >= 1 && lo <= 12) out.push({ ...c, inst }); });
+    for (let inv = 0; inv < 4; inv++) instances(c.root, set, inv, dt).forEach((inst: Inst) => { const lo = Math.min(...place(inst, c.q).frets); if (lo >= 1 && lo <= 12) out.push({ ...c, inst }); });
     return out;
   });
   const dist = (a: ProgChord, b: ProgChord): number => { const x = place(a.inst, a.q).pitches; const y = place(b.inst, b.q).pitches; return [...x].sort((m: number, n: number) => m - n).reduce((s: number, p: number, i: number) => s + Math.abs(p - [...y].sort((m: number, n: number) => m - n)[i]), 0); };
@@ -178,7 +197,7 @@ export const fretDistance = (a: ProgChord, b: ProgChord): number => {
   const y = place(b.inst, b.q).frets;
   return x.reduce((s: number, f: number, j: number) => s + Math.abs(f - y[j]), 0);
 };
-export function walkChords(k: RootDef, minor: boolean, set: number): ProgChord[][] {
+export function walkChords(k: RootDef, minor: boolean, set: number, dt: DropType = DROP2): ProgChord[][] {
   const base = [
     { root: { pc: (k.pc + 2) % 12, letter: (k.letter + 1) % 7 }, q: minor ? Q("hdim") : Q("m7") },
     { root: { pc: (k.pc + 7) % 12, letter: (k.letter + 4) % 7 }, q: Q("dom7") },
@@ -186,7 +205,7 @@ export function walkChords(k: RootDef, minor: boolean, set: number): ProgChord[]
   ];
   const all = (c: { root: RootDef; q: Quality }): ProgChord[] => {
     const out: ProgChord[] = [];
-    for (let inv = 0; inv < 4; inv++) instances(c.root, set, inv).forEach((inst: Inst) => out.push({ ...c, inst }));
+    for (let inv = 0; inv < 4; inv++) instances(c.root, set, inv, dt).forEach((inst: Inst) => out.push({ ...c, inst }));
     const noOpen = out.filter((x: ProgChord) => Math.min(...place(x.inst, x.q).frets) >= 1);
     return noOpen.length ? noOpen : out;
   };
@@ -194,8 +213,8 @@ export function walkChords(k: RootDef, minor: boolean, set: number): ProgChord[]
   const rounds: ProgChord[][] = [];
   let lastBass = -1;
   for (let r = 0; r < 4; r++) {
-    let list = instances(base[0].root, set, r).filter((x: Inst) => Math.min(...place(x, base[0].q).frets) >= 1);
-    if (!list.length) list = instances(base[0].root, set, r);
+    let list = instances(base[0].root, set, r, dt).filter((x: Inst) => Math.min(...place(x, base[0].q).frets) >= 1);
+    if (!list.length) list = instances(base[0].root, set, r, dt);
     const inst = list.find((x: Inst) => place(x, base[0].q).pitches[0] > lastBass) ?? list[list.length - 1];
     lastBass = place(inst, base[0].q).pitches[0];
     const ii: ProgChord = { ...base[0], inst };

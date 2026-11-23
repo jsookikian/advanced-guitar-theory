@@ -1,6 +1,6 @@
 // Theory checks for the Drop 2 lesson, over all 12 keys: spellings, intervals, pitches, frets, the Drop 2 derivation, and the one-note-at-a-time chains.
 const esbuild = require('esbuild'), path = require('path');
-const out = esbuild.buildSync({ entryPoints: [path.resolve(__dirname, '../src/lessons/drop-2-chords/theory.ts')], bundle: true, format: 'cjs', write: false, alias: { 'grok/canvas': path.resolve(__dirname, '../src/shared/grok-canvas-shim.ts') }, jsx: 'automatic' });
+const out = esbuild.buildSync({ entryPoints: [path.resolve(__dirname, '../src/shared/drop/theory.ts')], bundle: true, format: 'cjs', write: false, alias: { 'grok/canvas': path.resolve(__dirname, '../src/shared/grok-canvas-shim.ts') }, jsx: 'automatic' });
 const m = { exports: {} }; new Function('module', 'exports', 'require', out.outputFiles[0].text)(m, m.exports, require);
 const T = m.exports; const N = require('./notation'); const { KEYS } = require('./keys.js');
 let fails = 0; const F = s => { fails++; if (fails < 40) console.log('FAIL', s); };
@@ -128,6 +128,30 @@ for (const r of roots) for (const minor of [true, false]) for (const set of [0, 
     const bass = T.place(round[0].inst, round[0].q).pitches[0]; if (bass <= lastBass) F(`${r.id} ii bass does not climb in round ${ri + 1}`); lastBass = bass;
   });
 }
+// Learn and practise: the path maj7, 7, -7, half-dim, dim7, (raise the 5th), -6 (respell only), 6: every step in every inversion, every key.
+const mid = { ...T.Q('m6'), ls: [0, 2, 4, 6] }, lpath = [T.Q('maj7'), T.Q('dom7'), T.Q('m7'), T.Q('hdim'), T.Q('dim7'), mid, T.Q('m6'), T.Q('six')];
+const wantMoves = [[3, -1], [1, -1], [2, -1], [3, -1], [2, 1], null, [1, 1]]; let nLearn = 0;
+for (const r of roots) for (let inv = 0; inv < 4; inv++) T.instances(r, 1, inv).forEach(inst => {
+  for (let i = 0; i + 1 < lpath.length; i++) {
+    const a = T.place(inst, lpath[i]), b = T.place(inst, lpath[i + 1]), ord = T.ORDER[inv];
+    const diffs = a.pitches.map((p, j) => [ord[j], b.pitches[j] - p]).filter(x => x[1] !== 0);
+    if (wantMoves[i] === null) { if (diffs.length) F(`${r.id} respell changed a pitch`); }
+    else { if (diffs.length !== 1 || diffs[0][0] !== wantMoves[i][0] || diffs[0][1] !== wantMoves[i][1]) F(`${r.id} inv${inv} path step ${i + 1} changed ${JSON.stringify(diffs)} want one note by ${wantMoves[i]}`); }
+    if (i === 5 && T.toneNote(r, mid, 3) === T.toneNote(r, lpath[6], 3)) F(r.id + ' respell did not rename');
+  }
+  nLearn++;
+});
+// The same four notes read from the 6th: C-6 = A half-diminished, C6 = A-7 (the ø7 root is a major 6th above, a minor 3rd below, the chord root).
+const pcs = (root, q) => [0, 1, 2, 3].map(t => (root.pc + q.offs[t]) % 12).sort((x, y) => x - y).join();
+for (const r of roots) for (const [qq, rq] of [['m6', 'hdim'], ['six', 'm7']]) {
+  const rr = { pc: (r.pc + 9) % 12, letter: (r.letter + 5) % 7 };
+  if (pcs(r, T.Q(qq)) !== pcs(rr, T.Q(rq))) F(`${r.id} ${qq} and ${rq} on the 6th are not the same pitch classes`);
+  const spelled = (root, q) => [0, 1, 2, 3].map(t => T.toneNote(root, q, t)).sort().join();
+  if (spelled(r, T.Q(qq)) !== spelled(rr, T.Q(rq))) F(`${r.id} ${qq}/${rq} spelled differently: ${spelled(r, T.Q(qq))} vs ${spelled(rr, T.Q(rq))}`);
+  if (rr.pc !== (r.pc - 3 + 12) % 12) F('relative root is not a minor third below');
+  if (T.toneNote(r, T.Q(qq), 3) !== T.rootName(rr)) F(`${r.id} the 6th of ${qq} is not the relative root`);
+}
+console.log(`learn: ${nLearn} placements x 7 steps; relative chords checked in 12 keys`);
 console.log(`walk: ${nWalk} walks, highest fret used ${maxFret}`);
 console.log(`drop2 theory: ${roots.length} keys, ${nChord} chord tones, ${nInst} placements, fails ${fails}`);
 process.exit(fails ? 1 : 0);

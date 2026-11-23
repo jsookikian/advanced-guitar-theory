@@ -5,7 +5,7 @@
   "order": 2,
   "helpful": [
     {
-      "topic": "seventh chords (maj7, 7, m7)",
+      "topic": "seventh chords (maj7, 7, -7)",
       "why": "Every chord here has four notes: a root, a third, a fifth and a seventh."
     },
     {
@@ -14,7 +14,14 @@
     },
     {
       "topic": "reading chord symbols",
-      "why": "Names like Cm7 and Cø7 tell you which notes are lowered."
+      "why": "Names like C-7 and Cø7 tell you which notes are lowered."
     }
-  ]
+  ],
+  "card": {
+    "title": "Drop 2 Chords",
+    "subtitle": "Close chord, then drop one note",
+    "drop": "drop2",
+    "set": 1,
+    "inv": 2
+  }
 }

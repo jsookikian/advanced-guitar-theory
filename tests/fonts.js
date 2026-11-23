@@ -35,10 +35,13 @@ function cmap(file) { // format 4 (BMP) subtables
         if (!ch) { out.push({ ch: '', ff, checked: true, w: 99, wNone: 0, plainPiece: el.textContent }); return; }
         out.push({ ch: ch.codePointAt(0).toString(16), ff, checked: document.fonts.check("40px 'MuseJazz Text'", ch), w: probe(ch, "'MuseJazz Text'"), wFallback: probe(ch, 'serif'), wNone: probe('', "'MuseJazz Text'") });
       });
-      return { out, plain: [...document.querySelectorAll('#drop-root, #nine-root')].map(r => [...r.querySelectorAll('*')].filter(e => e.children.length === 0 && /[]/.test(e.textContent) && !e.closest('[data-muse]') && !e.closest('svg')).map(e => e.tagName + ':' + e.textContent)).flat(), loaded: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family) };
+      const chords = [...document.querySelectorAll('[data-chord]')].map(el => ({ text: el.textContent, ff: getComputedStyle(el).fontFamily, kids: (() => { const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); const ks = []; let n; while ((n = w.nextNode())) if (n.nodeValue.trim()) ks.push({ text: n.nodeValue, ff: getComputedStyle(n.parentElement).fontFamily }); return ks; })() }));
+      return { chords, out, plain: [...document.querySelectorAll('#drop-root, #nine-root')].map(r => [...r.querySelectorAll('*')].filter(e => e.children.length === 0 && /[]/.test(e.textContent) && !e.closest('[data-muse]') && !e.closest('svg')).map(e => e.tagName + ':' + e.textContent)).flat(), loaded: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family) };
     });
     if (!r.out.length) F(page + ': no chord symbols found on the screen to check');
     r.out.forEach(o => { if (!o.ch) { if (!/MuseJazz Text/.test(o.ff)) F(`${page} quality mark '${o.plainPiece}' drawn in ${o.ff}`); return; } if (!/MuseJazz Text/.test(o.ff)) F(`${page} U+${o.ch} drawn in ${o.ff}`); if (!o.checked) F(`${page} U+${o.ch}: document.fonts.check false`); if (o.w < 4) F(`${page} U+${o.ch}: zero width`); if (Math.abs(o.w - o.wNone) < 0.01) F(`${page} U+${o.ch} measures like a missing glyph (${o.w})`); });
+    r.chords.forEach(c => { if (!/MuseJazz Text/.test(c.ff)) F(`${page} chord name '${c.text}' set in ${c.ff}`); c.kids.forEach(k => { if (!/MuseJazz Text/.test(k.ff)) F(`${page} part '${k.text}' of chord name '${c.text}' set in ${k.ff}`); }); });
+    if (!r.chords.length) F(page + ': no chord-name elements found');
     r.plain.forEach(x => F(`${page}: symbol outside a MuseJazz span: ${x}`));
     if (!r.loaded.some(f => /MuseJazz Text/.test(f))) F(page + ': MuseJazz Text was not loaded');
     console.log(page, 'quality marks checked:', r.out.length, 'glyphs:', [...new Set(r.out.filter(o => o.ch).map(o => 'U+' + o.ch.toUpperCase()))].join(' '));

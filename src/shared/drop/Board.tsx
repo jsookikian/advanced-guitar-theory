@@ -1,10 +1,10 @@
 import type { CSSProperties } from "grok/canvas";
-import { INK, INK2, PAGE, SANS, EASE } from "../../shared/ui";
+import { INK, INK2, PAGE, SANS, EASE } from "../ui";
 import { STR_NAMES, MAXF } from "./theory";
 
 // The same fretboard as the first lesson (a seven-fret window, string names on the left, the nut at fret 0), drawn for one Drop 2 chord.
 // The four voices are kept by voice, not by position, so when a note changes only its dot slides and re-labels; the others stay where they are.
-export interface Voice { s: number; f: number; fill: string; label: string; op: number; halo: boolean; ghost?: { s: number; f: number }; alt?: string }
+export interface Voice { s: number; f: number; fill: string; label: string; op: number; halo: boolean; ghost?: { s: number; f: number }; alt?: string; dashed?: boolean }
 
 const FRET_LABELS = [3, 5, 7, 9, 12, 15, 17, 19, 21];
 
@@ -66,9 +66,9 @@ export default function Board(props: { voices: Voice[]; wl: number; lefty: boole
                 if (c && c.animate) c.animate([{ transform: "scale(1)" }, { transform: "scale(1.3)" }, { transform: "scale(1)" }], { duration: 220, easing: "ease-out" });
               }}>
                 {v.halo ? <circle className="drop-halo" r={r + 6} style={{ fill: "none", stroke: INK2, strokeWidth: 1.6 }} /> : null}
-                <circle data-dot="1" r={r} style={{ fill: v.fill, stroke: v.fill, opacity: v.op, transition: "opacity 320ms ease, fill 320ms ease, stroke 320ms ease", transformBox: "fill-box", transformOrigin: "center" }} />
+                <circle data-dot="1" r={r} strokeDasharray={v.dashed ? "3 2.4" : undefined} strokeWidth={v.dashed ? 2.2 : undefined} style={{ fill: v.dashed ? PAGE : v.fill, stroke: v.fill, opacity: v.op, transition: "opacity 320ms ease, fill 320ms ease, stroke 320ms ease", transformBox: "fill-box", transformOrigin: "center" }} />
                 {v.alt ? <text data-alt="1" x={(v.f - wl >= 4) !== lefty ? -(r + 11) : r + 11} y={-5} textAnchor={(v.f - wl >= 4) !== lefty ? "end" : "start"} fontSize={10.5} fontWeight={500} letterSpacing={0.6} style={{ fill: INK2, stroke: PAGE, strokeWidth: 4, paintOrder: "stroke", strokeLinejoin: "round", pointerEvents: "none", animation: "drop-lbl 360ms ease both" }}>{v.alt}</text> : null}
-                <text key={v.label} y={size * 0.36} textAnchor="middle" fontSize={size} fontWeight={600} letterSpacing={dbl ? 1.4 : 0} style={{ fill: PAGE, opacity: v.op < 0.5 ? 0.7 : 1, animation: "drop-lbl 360ms ease both", pointerEvents: "none" }}>{v.label}</text>
+                <text key={v.label} y={size * 0.36} textAnchor="middle" fontSize={size} fontWeight={600} letterSpacing={dbl ? 1.4 : 0} style={{ fill: v.dashed ? v.fill : PAGE, opacity: v.op < 0.5 ? 0.7 : 1, animation: "drop-lbl 360ms ease both", pointerEvents: "none" }}>{v.label}</text>
               </g>
             );
           })}

@@ -1,0 +1,28 @@
+{
+  "title": "Drop 3 Chords",
+  "summary": "The third note from the top drops an octave to become the bass, with one string left silent: how it differs from Drop 2, its inversions, and how one changed note turns one chord into the next.",
+  "level": "Advanced",
+  "order": 3,
+  "helpful": [
+    {
+      "topic": "Drop 2 chords",
+      "why": "Drop 3 works the same way with a different note dropped.",
+      "lesson": "drop-2-chords"
+    },
+    {
+      "topic": "seventh chords (maj7, 7, -7)",
+      "why": "Every chord here has four notes: a root, a third, a fifth and a seventh."
+    },
+    {
+      "topic": "the notes on the fretboard",
+      "why": "The lesson names each dot, and where it sits on its string."
+    }
+  ],
+  "card": {
+    "title": "Drop 3 Chords",
+    "subtitle": "The third note drops, one string stays silent",
+    "drop": "drop3",
+    "set": 1,
+    "inv": 1
+  }
+}
