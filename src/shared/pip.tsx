@@ -3,7 +3,7 @@ import tokens from "./tokens.json";
 
 // Every note name and interval in running text is a small circle (roots red, the 9 teal, the rest ink), like the dots on the board.
 // `pipify` finds them in a string (see tokens.json; `[x]` forces one); tests/circles.js enforces that none are left as plain text.
-const RED = "#b42318";
+const RED = "#e8372a";
 const TEAL = "#0f766e";
 const INK = "#4d3533";
 

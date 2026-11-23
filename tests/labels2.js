@@ -3,8 +3,8 @@ await pg.setViewport({width:390,height:844});await pg.goto(site.url('lessons/dom
 const res=await pg.evaluate(async()=>{
  const S=t=>new Promise(r=>setTimeout(r,t));const OP=[4,9,2,7,11,4];
  const LET=['C','D','E','F','G','A','B'],NAT=[0,2,4,5,7,9,11],ST={0:0,2:1,4:2,5:3,7:4,9:5,10:6};
- const NOTE={0:'C',2:'D',4:'E',5:'F',7:'G',9:'A',10:'Bb'};
- const iv=(d,r)=>{const ls=(ST[d]-ST[r]+7)%7,se=(d-r+12)%12,df=((se-NAT[ls]+18)%12)-6;const pre=df<0?'b'.repeat(-df):'#'.repeat(df);if(ls===1&&df===0)return '9';return pre+(ls===1?9:ls+1);};
+ const NOTE={0:'C',2:'D',4:'E',5:'F',7:'G',9:'A',10:'B♭'};
+ const iv=(d,r)=>{const ls=(ST[d]-ST[r]+7)%7,se=(d-r+12)%12,df=((se-NAT[ls]+18)%12)-6;const pre=df<0?'♭'.repeat(-df):'♯'.repeat(df);if(ls===1&&df===0)return '9';return pre+(ls===1?9:ls+1);};
  const btns=sel=>[...document.querySelectorAll(sel)];
  const click=(sel,t)=>{const x=btns(sel).find(b=>b.textContent.trim()===t);if(!x)throw new Error('no '+t+' in '+sel);x.click();};
  const goCard=async c=>{btns('nav[aria-label="Lesson steps"] button')[c].click();await S(60);const cur=btns('nav button').findIndex(x=>x.getAttribute('aria-current')==='step');if(cur!==c)throw new Error('nav '+c+' got '+cur);};
@@ -19,7 +19,7 @@ const res=await pg.evaluate(async()=>{
     for(const mode of ['Intervals','Notes']){
      click('#nine-show button',mode); await S(40);
      const vis=[...document.querySelectorAll('#nine-board g[data-vis="1"]')];
-     const isRed=g=>/(b42318|180, 35, 24)/i.test(g.querySelector('circle').style.getPropertyValue('fill'));
+     const isRed=g=>/(e8372a|232, 55, 42)/i.test(g.querySelector('circle').style.getPropertyValue('fill')+g.querySelector('circle').style.getPropertyValue('stroke'));
      const redEl=vis.find(isRed);
      const r=redEl?(OP[+redEl.dataset.s]+ +redEl.dataset.f)%12:0;
      let lit=0;
@@ -42,7 +42,7 @@ const res=await pg.evaluate(async()=>{
   for(const [em,tg] of toggles){ if(em){click('.nine-card button',em);await S(30);} if(tg) {click('.nine-card button',tg);await S(30);}
    for(const shp of (c<=3?[null]:['1','2','3','4','5'])){ if(shp){btns('[aria-label="Shape"] [role=radio]')[+shp-1].click(); await S(30);}
    for(const mode of ['Intervals','Notes']){
-    for(const [fl,fr] of (mode==='Notes'?[['Note Names',0]]:FR)){
+    for(const [fl,fr] of (mode==='Notes'?[['Note Names',0]]:(tg==='Pentatonic'||tg==='Mixolydian')?[['Intervals',0]]:FR)){
      click('#nine-labels button',fl);
      await S(40);
      const quiz=false;
@@ -52,7 +52,7 @@ const res=await pg.evaluate(async()=>{
      for(const g of document.querySelectorAll('#nine-board g[data-vis="1"]')){
       const s=+g.dataset.s,f=+g.dataset.f,d=(OP[s]+f)%12, lab=g.querySelector('text').textContent; dots++;
       const exp = mode==='Notes'? NOTE[d] : (d===r?'R':iv(d,r));
-      const red = /(b42318|180, 35, 24)/i.test(g.querySelector('circle').style.getPropertyValue('fill'));
+      const red = /(e8372a|232, 55, 42)/i.test(g.querySelector('circle').style.getPropertyValue('fill')+g.querySelector('circle').style.getPropertyValue('stroke'));
       const FOC=[[0,4,7,10],[4,7,10],[4,7,10,2],[4,7,10,2]][c];
       if(FOC){const dim=parseFloat(g.querySelector('circle').style.opacity||'1')<0.5; if(dim===FOC.includes(d)) fails.push(`dimming card${c+1} ${mode} ${fl}: s${s}f${f} dim=${dim}`);}
       if(lab!==exp || red!==(d===r)) fails.push(`card${c+1} ${em} ${tg} sh${shp} ${mode} ${fl}: s${s}f${f} got '${lab}' red=${red} want '${exp}'`);
@@ -61,8 +61,8 @@ const res=await pg.evaluate(async()=>{
      const leg=document.getElementById('nine-name').textContent;
      const rootShown=[...document.querySelectorAll('#nine-board g[data-vis="1"]')].some(g=>(OP[+g.dataset.s]+ +g.dataset.f)%12===r);
      legChecks++;
-     if(c===6){ nameChecks++; const h2=document.querySelector('.nine-card h2').textContent; if(!new RegExp(BASE+'( no root|/[A-G]b?)?$').test(h2)) fails.push(`name card6 ${tg} ${fl}: ${h2}`);}
-     if(c===7&&mode==='Intervals'&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; const ti=document.getElementById('nine-name-title').textContent, su=document.getElementById('nine-name-sub').textContent; if(!new RegExp('^'+BASE+'( Rootless|/[A-G]b?)?$').test(ti)||su!==tg) fails.push(`name ${tg} ${fl}: ${ti} / ${su}`);}
+     if(c===6){ nameChecks++; const h2=document.querySelector('.nine-card h2').textContent; if(!new RegExp(BASE+'( no root|/[A-G][♭♯]?)?$').test(h2)) fails.push(`name card6 ${tg} ${fl}: ${h2}`);}
+     if(c===7&&mode==='Intervals'&&(tg==='Drop 2'||tg==='Drop 3')){ nameChecks++; const ti=document.getElementById('nine-name-title').textContent, su=document.getElementById('nine-name-sub').textContent; if(!new RegExp('^'+BASE+'( Rootless|/[A-G][♭♯]?)?$').test(ti)||su!==tg) fails.push(`name ${tg} ${fl}: ${ti} / ${su}`);}
      const gl=document.querySelector('#nine-labels [aria-checked=true]').textContent;
      if(gl!==fl) fails.push(`global frame card${c+1} shows ${gl} want ${fl}`);
     }}}}

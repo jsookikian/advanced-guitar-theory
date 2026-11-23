@@ -10,6 +10,8 @@ const scan=where=>pg.evaluate((src,flags,where)=>{
  const re=new RegExp(src,flags);const ex='.nine-note,[data-pip],strong,h1,h2,#nine-name,svg,nav,select,option,label,style,script,a,button[aria-pressed],#nine-settings,#nine-tip';
  const bad=[];const w=document.createTreeWalker(document.getElementById('nine-root'),NodeFilter.SHOW_TEXT);let n;
  while((n=w.nextNode())){const t=n.nodeValue;if(!t.trim()||n.parentElement.closest(ex))continue;
+  // A chord name set in pieces (C, raised 9; G, raised m6, / E): its letter sits beside a raised span, and is part of the chord name.
+  const sib=n.nextSibling,prv=n.previousSibling;if((sib&&sib.nodeType===1&&sib.dataset&&sib.dataset.sup)||(prv&&prv.nodeType===1&&prv.dataset&&prv.dataset.sup))continue;
   // [x] is a deliberate circle only when it was rendered as one; a literal bracket left in text is a bug too.
   for(const m of t.matchAll(re))bad.push(where+': "'+m[0]+'" in "'+t.trim().slice(0,70)+'"');}
  return bad;},tok.source,tok.flags,where);

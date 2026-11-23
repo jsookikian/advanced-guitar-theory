@@ -19,8 +19,10 @@ const LINE = "#dcd5d4";
 // Edges of controls need more contrast than hairlines (3:1 against the paper).
 const LINE_UI = "#b9aeac";
 const TEAL = "#0f766e";
-const RED = "#b42318";
+const RED = "#e8372a";
 const SERIF = "Aime, Georgia, serif";
+// The chord name above the diagram is hand-lettered like a lead sheet: MuseJazz Text, with MuseJazz's drawn flat and sharp signs (SIL OFL, fonts/OFL-MuseJazz.txt).
+const REALBOOK = "'MuseJazz Text', 'KMR Melange Grotesk', -apple-system, 'Helvetica Neue', Arial, sans-serif";
 const SANS = "'KMR Melange Grotesk', -apple-system, 'Helvetica Neue', Arial, sans-serif";
 const EASE = "cubic-bezier(.45,.05,.25,1)";
 const MAXF = 24;
@@ -66,11 +68,44 @@ const GM6 = [7, 10, 2, 4];
 const CHORD = [0, 4, 7, 10];
 const PAINT = ["color", "background-color", "fill", "stroke", "border-color", "border-left-color"];
 
+// Accidentals are the real symbols (\u266d \u266f), never a letter b or a #. `flat` converts a key id such as "Bb" or "F#" for display.
+const flat = (id: string): string => id.replace(/(?<=[A-G])b/g, "\u266d").replace(/#/g, "\u266f");
+
+// A chord name is set like a lead sheet: the root letter stays on the line, and everything that follows it (the quality and extension: m6,
+// \u00f8, 9, 7) is raised and smaller, as are flats and sharps. `titlePieces` cuts a name into those parts; the screen and the share image
+// both draw from it. Words after the chord ("Rootless", "Dominant Pentatonic") and a slash bass note stay on the line.
+interface TitlePiece { t: string; scale: number; rise: number; after?: number }
+function titlePieces(text: string): TitlePiece[] {
+  const acc = (t: string): TitlePiece => ({ t, scale: 0.92, rise: 0.5 });
+  // A slash chord gets a little extra air after the "/" (Gm6/ E).
+  const rest = (t: string): TitlePiece[] => t.split(/([\u266d\u266f]|\/)/).filter((x: string) => x !== "").map((x: string) => (x === "\u266d" || x === "\u266f" ? acc(x) : x === "/" ? { t: x, scale: 1, rise: 0, after: 0.34 } : { t: x, scale: 1, rise: 0 }));
+  const m = /^([A-G])([\u266d\u266f]{0,2})(m\d*|\u00f8\d*|\d+)?(.*)$/.exec(text);
+  if (!m || (!m[2] && !m[3])) return rest(text); // no accidental, quality or number after the letter: not a chord to set in pieces ("Arpeggio", "Drop 2", "C Mixolydian")
+  const out: TitlePiece[] = [{ t: m[1], scale: 1, rise: 0 }];
+  if (m[2]) out.push(acc(m[2]));
+  if (m[3]) out.push({ t: m[3], scale: 0.84, rise: 0.38 });
+  return [...out, ...rest(m[4])];
+}
+// Chord names inside running text (Em7, C9, G\u00f8) get the same lead-sheet treatment; `chordify` finds them in a string.
+function chordify(text: string): ReactNode {
+  return text.split(/([A-G][\u266d\u266f]{0,2}(?:m\d*|\u00f8\d*|\d+)(?![\w\u266d\u266f]))/).map((part: string, i: number) => (i % 2 === 1 ? <span key={i}>{titleNodes(part)}</span> : part));
+}
+// Children of a chord-name component: when they are all text, join them and set the name; otherwise leave them as they are.
+function chordChildren(children: ReactNode): ReactNode {
+  const arr = Array.isArray(children) ? children : [children];
+  return arr.every((x: unknown) => typeof x === "string" || typeof x === "number") ? titleNodes(arr.join("")) : children;
+}
+function titleNodes(text: string): ReactNode {
+  return titlePieces(text).map((x: TitlePiece, i: number) => (x.scale === 1 && !x.after
+    ? x.t
+    : <span key={i} data-sup="1" style={{ fontSize: `${x.scale}em`, position: "relative", top: `-${x.rise}em`, margin: x.after ? `0 ${x.after}em 0 0.02em` : "0 0.02em 0 0.03em" }}>{x.t}</span>));
+}
+
 function spell(k: KeyDef, semi: number): string {
   const l = (k.letter + STEPS[semi]) % 7;
   const pc = (k.pc + semi) % 12;
   const diff = ((pc - NATURAL[l] + 18) % 12) - 6;
-  const acc = diff === -2 ? "bb" : diff === -1 ? "b" : diff === 1 ? "#" : diff === 2 ? "x" : "";
+  const acc = diff === -2 ? "\u266d\u266d" : diff === -1 ? "\u266d" : diff === 1 ? "\u266f" : diff === 2 ? "\u266f\u266f" : "";
   return LETTERS[l] + acc;
 }
 // Interval name of scale degree d counted from scale degree r (both semitones above the chord root).
@@ -78,7 +113,7 @@ function ivName(d: number, r: number): string {
   const ls = (STEPS[d] - STEPS[r] + 7) % 7;
   const semis = (d - r + 12) % 12;
   const diff = ((semis - NATURAL[ls] + 18) % 12) - 6;
-  const pre = diff < 0 ? "b".repeat(-diff) : "#".repeat(diff);
+  const pre = diff < 0 ? "\u266d".repeat(-diff) : "\u266f".repeat(diff);
   return pre + String(ls === 1 ? 9 : ls + 1);
 }
 function degOf(s: number, f: number, k: KeyDef): number {
@@ -150,17 +185,18 @@ function lockPaint(root: HTMLElement): void {
 
 interface Look { fill: string; stroke: string; sw: number; dashed: boolean; text: string; dotOp: number; textOp: number }
 
-function look(dot: Dot, step: Step, drop2: Set<string>, ringDeg: number): Look {
+function look(dot: Dot, step: Step, drop2: Set<string>, ringDeg: number, plain9: boolean, ghostRoot: boolean): Look {
   const L: Look = { fill: INK, stroke: INK, sw: 0, dashed: false, text: PAGE, dotOp: 1, textOp: 1 };
   if (dot.d === ringDeg) { L.fill = PAGE; L.stroke = INK; L.text = INK; L.sw = 2.5; }
-  else if (dot.add) { L.fill = PAGE; L.stroke = INK; L.text = INK; L.sw = 1.6; L.dashed = true; }
-  else if (dot.d === 2 && step >= 2 && step <= 3) { L.fill = TEAL; L.stroke = TEAL; L.text = "#ffffff"; }
+  else if (!plain9 && dot.d === 2 && step >= 2 && step <= 3) { L.fill = TEAL; L.stroke = TEAL; L.text = "#ffffff"; }
   if (step === 4) {
     if (drop2.has(`${dot.s}-${dot.f}`)) { L.fill = TEAL; L.stroke = TEAL; L.text = "#ffffff"; L.sw = 0; L.dashed = false; }
     else { L.dotOp = 0.18; L.textOp = 0.35; }
   }
   // The root of the active frame is always a filled red R.
   if (dot.d === ringDeg) { L.fill = RED; L.stroke = RED; L.text = "#ffffff"; L.sw = 0; L.dashed = false; }
+  // A rootless chord shows where its root would be: the same red, but a dashed ring with nothing inside.
+  if (ghostRoot && dot.d === 0) { L.fill = PAGE; L.stroke = RED; L.text = RED; L.sw = 2.2; L.dashed = true; L.dotOp = 1; L.textOp = 1; }
   return L;
 }
 
@@ -173,6 +209,10 @@ interface BoardProps {
   ringDeg: number;
   lefty: boolean;
   drop2: Set<string>;
+  // Explore draws the 9 like any other note; the guided steps colour it teal.
+  plain9?: boolean;
+  // The root is left out of this chord: draw it as a dashed red ring.
+  ghostRoot?: boolean;
   // Full neck: frets 0-24 at once in the same viewBox, smaller dots, the current shape on a faint band.
   full?: boolean;
   band?: [number, number];
@@ -194,9 +234,11 @@ interface BoardProps {
 const ZOOM_W = 356;
 
 const FULL_MARKS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
+// The fret numbers drawn under the neck: just the inlay frets.
+const FRET_LABELS = [3, 5, 7, 9, 12, 15, 17, 19, 21];
 
 function Board(props: BoardProps) {
-  const { k, shown, wl, step, labelOf, ringDeg, lefty, drop2, full, band, scroll, center, onPlay, onSettle, dim, spot } = props;
+  const { k, shown, wl, step, labelOf, ringDeg, lefty, drop2, plain9, ghostRoot, full, band, scroll, center, onPlay, onSettle, dim, spot } = props;
   const scRef = useRef<HTMLDivElement>(null);
   const firstRef = useRef<boolean>(true);
   const progAt = useRef<number>(0);
@@ -283,12 +325,12 @@ function Board(props: BoardProps) {
           {frets.map((f: number) => <line key={`f${f}`} x1={lx(f * cw)} x2={lx(f * cw)} y1={Y(5)} y2={Y(0)} style={{ stroke: INK2 }} strokeWidth={1.2} opacity={0.55} />)}
           {[0, 1, 2, 3, 4, 5].map((s: number) => <line key={`s${s}`} x1={lx(-openW)} x2={lx(MAXF * cw)} y1={Y(s)} y2={Y(s)} style={{ stroke: INK }} strokeWidth={1} opacity={0.5} />)}
           <line x1={0} x2={0} y1={Y(5) - 0.5} y2={Y(0) + 0.5} style={{ stroke: INK }} strokeWidth={5} />
-          {frets.filter((f: number) => !full || FULL_MARKS.includes(f)).map((f: number) => <text key={`n${f}`} x={gx(f)} y={Y(0) + 32} textAnchor="middle" fontSize={full ? 9.5 : 11} style={{ fill: INK2 }}>{f}</text>)}
+          {frets.filter((f: number) => FRET_LABELS.includes(f)).map((f: number) => <text key={`n${f}`} x={gx(f)} y={Y(0) + 32} textAnchor="middle" fontSize={full ? 9.5 : 11} style={{ fill: INK2 }}>{f}</text>)}
           {all.map((dot: Dot) => {
             const key = `${dot.s}-${dot.f}`;
             const rk = rank.get(key);
             const vis = rk !== undefined;
-            const L = look(dot, step, drop2, ringDeg);
+            const L = look(dot, step, drop2, ringDeg, !!plain9, !!ghostRoot);
             if (dim && dim.has(key)) { L.dotOp = 0.16; L.textOp = 0.3; }
             if (spot !== undefined && spot !== null) { if (dot.d === spot) { L.dotOp = 1; L.textOp = 1; if (!dot.add) { const col = dot.d === ringDeg ? RED : dot.d === 2 ? TEAL : INK; L.fill = col; L.stroke = col; L.text = "#ffffff"; L.sw = 0; L.dashed = false; } } else { L.dotOp = 0.07; L.textOp = 0.12; } }
             const delay = vis ? Math.min(rk * 14, 360) : 0;
@@ -369,7 +411,7 @@ function Tabs(props: { options: { value: string; label: string }[]; value: strin
       {options.map((o: { value: string; label: string }) => {
         const on = o.value === value;
         return (
-          <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.value)} style={{ minWidth: 0, padding: 0, border: 0, borderRadius: 0, cursor: "pointer", fontFamily: SANS, fontSize: props.size ?? 13.5, fontWeight: on ? 700 : 400, lineHeight: props.wrap ? "15px" : "20px", whiteSpace: props.wrap ? "normal" : "nowrap", color: on ? INK : INK2, backgroundColor: PAGE, boxShadow: on ? `inset 0 -2px 0 ${INK}` : "none", transition: "color 200ms ease, box-shadow 200ms ease" }}>{o.label}</button>
+          <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.value)} style={{ minWidth: 0, padding: 0, border: 0, borderRadius: 0, cursor: "pointer", fontFamily: SANS, fontSize: props.size ?? 13.5, fontWeight: on ? 700 : 400, lineHeight: props.wrap ? "15px" : "20px", whiteSpace: props.wrap ? "normal" : "nowrap", color: on ? INK : INK2, backgroundColor: PAGE, boxShadow: on ? `inset 0 -2px 0 ${INK}` : "none", transition: "color 200ms ease, box-shadow 200ms ease" }}>{titleNodes(o.label)}</button>
         );
       })}
     </div>
@@ -463,7 +505,7 @@ const BEAT_SPEC: Record<string, BeatSpec[]> = {
   nine: [{ lit: [2], step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }, { lit: ARP, step: 2 }],
   names: [{ lit: ARP, ring: 4, step: 2 }, { lit: ARP, ring: 7, step: 2 }, { lit: ARP, ring: 0, step: 2 }],
   penta: [{ lit: ARP, step: 2 }, { lit: "penta", step: 2 }, { lit: ARP, step: 2 }],
-  mixo: [{ lit: ARP, step: 3 }, { lit: "penta", step: 3 }, { lit: [5, 9], step: 3 }, { lit: [5, 4], step: 3 }, { lit: [10, 4, 2], step: 3 }, { lit: [9, 5, 0], step: 3 }],
+  mixo: [{ lit: ARP, step: 3 }, { lit: "penta", step: 3 }, { lit: [5, 9], step: 3 }, { lit: [5, 4], step: 3 }, { lit: [10, 4, 2], step: 3 }, { lit: [9, 5, 0], ring: 5, step: 3 }],
   voicing: [{ lit: "drop2", mode: "grip", step: 4 }, { lit: "drop3", mode: "drop3", step: 4 }, { lit: ARP, mode: "arp", step: 2 }],
 };
 function homeIndex(list: Pos[]): number {
@@ -474,18 +516,18 @@ function homeIndex(list: Pos[]): number {
 // The first-time tour: each step lights one control (CSS selector) on the card it lives on (`at` = card, beat).
 const TUT_SEEN = "agt-dominant-pentatonics-tutorial-seen";
 const TUT_STEPS: TutStep[] = [
-  { at: [0, 0], live: true, sel: "#nine-scroll, #nine-board", title: "The fretboard", text: "Six strings, frets 1 to 7. Every dot is a note of the chord or scale. Tap any dot to hear it." },
+  { at: [0, 0], live: true, sel: "#nine-scroll, #nine-board", title: "The fretboard", text: "Six strings and seven frets at a time. Every dot is a note of the chord or scale. Tap any dot to hear it." },
   { at: [0, 0], live: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board. Tap one to spotlight that note on the board and hear it." },
   { at: [0, 0], live: true, sel: "#nine-hear", title: "Hear it", text: "Plays what is lit on the board, so you hear exactly what the sentence is about." },
-  { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals ([R] [3] [5] [b7]) and note names ([C] [E] [G] [Bb]). The root is always red." },
+  { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals ([R] [3] [5] [\u266d7]) and note names. The root is always red." },
   { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#nine-settings", title: "Settings", text: "Key, Left-handed, Sound, Neck, Show tutorial and Share image live here." },
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "The lesson has eight steps. Tap any one to jump straight to it." },
-  { at: [0, 0], sel: "#nine-name + div", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
+  { at: [0, 0], sel: "#nine-nav", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
   { at: [2, 2], sel: ".nine-card p button[aria-pressed]", title: "Chord names are buttons", text: "A chord name with a dotted underline is a button. Tap it to count the board's intervals from that chord, and tap it again to go back." },
   { at: [7, 0], live: true, sel: "#nine-shape", title: "Explore: the five shapes", text: "The last step opens the whole neck. Pick one of the five shapes. The \u2212 and + under the board\u2019s arrows move it an octave down or up." },
   { at: [7, 0], live: true, sel: "#nine-scroll, #nine-board", title: "Walk the neck", text: "Swipe or scroll the neck, or use the arrows at its edges, to move up and down the shapes." },
-  { at: [7, 0], live: true, sel: "#nine-labels", title: "Label the dots", text: "Note Names shows the notes. The other three count intervals from a chord: the rootless C9, E\u00f8 or Gm6. Same notes, three names." },
-  { at: [7, 0], live: true, sel: "#nine-name", title: "What you are looking at", text: "The chord or voicing on the board, with its layer underneath. The arrow at the right shares the diagram as an image." },
+  { at: [7, 0], live: true, sel: "#nine-labels", title: "Label the dots", text: "Note Names shows the notes; Intervals counts them from the root. On the chord layers you can count from the rootless dominant 9, the half-diminished or the minor 6 instead: same notes, three names." },
+  { at: [7, 0], live: true, sel: "#nine-name", title: "What you are looking at", text: "The chord, or the scale on the Pentatonic and Mixolydian layers. A Drop voicing adds its name underneath. The arrow at the right shares the diagram as an image." },
   { at: [7, 0], live: true, sel: "#nine-play", title: "Play", text: "Plays the notes of the shape from low to high. Tap again to stop." },
 ];
 
@@ -494,9 +536,20 @@ interface Helpful { topic: string; why: string; href: string | null }
 declare const __HELPFUL__: Helpful[];
 const HELPFUL: Helpful[] = __HELPFUL__;
 
+// Where you are lives in the address (#s4b2 = step 4, part 2), so a refresh, or a link, comes back to the same place.
+function readSpot(): { card: number; beat: number } {
+  const m = /^#s(\d+)(?:b(\d+))?$/.exec(window.location.hash);
+  if (!m) return { card: 0, beat: 0 };
+  const card = Number(m[1]) - 1;
+  if (!(card >= 0 && card < CARDS.length)) return { card: 0, beat: 0 };
+  const n = GUIDED.has(CARDS[card].kind) ? BEAT_SPEC[CARDS[card].kind].length : 1;
+  const beat = Number(m[2] ?? 1) - 1;
+  return { card, beat: beat >= 0 && beat < n ? beat : 0 };
+}
+
 export default function App() {
-  const [card, setCard] = useState<number>(0);
-  const [beat, setBeat] = useState<number>(0);
+  const [card, setCard] = useState<number>(() => readSpot().card);
+  const [beat, setBeat] = useState<number>(() => readSpot().beat);
   const [dir, setDir] = useState<number>(1);
   const [keyId, setKeyId] = useState<string>("C");
   const [show, setShow] = useState<string>("intervals");
@@ -535,6 +588,15 @@ export default function App() {
     setBeat(b);
     setFrame("0"); // the count-from lens belongs to the screen it was chosen on
   };
+  useEffect(() => {
+    try { window.history.replaceState(null, "", `#s${card + 1}${beat > 0 ? `b${beat + 1}` : ""}`); } catch { /* a sandboxed frame may not allow it; the lesson still works */ }
+  }, [card, beat]);
+  // Editing the address by hand, or following a link to another step of the same page, moves the lesson there too.
+  useEffect(() => {
+    const onHash = (): void => { const sp = readSpot(); setCard(sp.card); setBeat(sp.beat); };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   const cardRef = useRef<number>(0);
   cardRef.current = card;
   beatRef.current = beat;
@@ -625,10 +687,14 @@ export default function App() {
   const notes = (ds: number[]): string => ds.map(n).join(" ");
   const ivs = (ds: number[]): string => ds.map(iv).join(" ");
 
-  const shown = modeDots(cur.dots, mode).filter((d: Dot) => !(C.kind === "c7" && d.d === 2)); // the 9 is not part of C7: it is not drawn on that step
+  // Rootless: the arpeggio and the Drop voicings (and the guided beats after the root is dropped), counted from the root, draw the missing root as a dashed red ring.
+  const ghostRoot = eff === 0 && C.kind !== "c7" && (mode === "arp" || mode === "grip" || mode === "drop3" || (C.kind === "lose" && beat >= 1));
+  const base = modeDots(cur.dots, mode);
+  const shown = (ghostRoot && !base.some((d: Dot) => d.d === 0) ? [...base, ...cur.dots.filter((d: Dot) => d.d === 0 && !d.add)] : base).filter((d: Dot) => !(C.kind === "c7" && d.d === 2)); // the 9 is not part of C7: it is not drawn on that step
   // Guided beats: the notes the sentence is about stay lit; every other note of the position is dimmed.
   const isLit = (d: Dot): boolean => {
     if (!bt) return true;
+    if (ghostRoot && d.d === 0) return true; // the dashed root ring is never dimmed
     const l = bt.lit;
     if (l === "penta") return !d.add;
     if (l === "drop2") return cur.drop.has(`${d.s}-${d.f}`);
@@ -660,7 +726,7 @@ export default function App() {
     const set = mode === "grip" ? cur.drop : mode === "drop3" ? cur.drop3 : null;
     const midis = set
       ? [...set].map((key: string) => { const [s, f] = key.split("-").map(Number); return OPEN_MIDI[s] + f; })
-      : shown.filter((d: Dot) => !(dimSet && dimSet.has(`${d.s}-${d.f}`))).map((d: Dot) => OPEN_MIDI[d.s] + d.f);
+      : shown.filter((d: Dot) => !(dimSet && dimSet.has(`${d.s}-${d.f}`)) && !(ghostRoot && d.d === 0)).map((d: Dot) => OPEN_MIDI[d.s] + d.f);
     setPlaying(true);
     void playPhrase({ notes: midis, style: set ? "strum" : "arpeggio", onNote: pulseMidi }).then(() => setPlaying(false));
   };
@@ -682,14 +748,15 @@ export default function App() {
   };
   const shapeLabel = (q: Pos): string => `Shape ${q.p + 1}`;
 
-  const layerSeg = () => tabsBtn("Layer", [{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => setLayerMode(v), [9, 10, 10, 7, 7], "nine-layers");
+  const scaleLayer = layerMode === "penta" || layerMode === "mixo";
+  const layerSeg = () => tabsBtn("Layer", [{ value: "arp", label: "Arpeggio" }, { value: "penta", label: "Pentatonic" }, { value: "mixo", label: "Mixolydian" }, { value: "grip", label: "Drop 2" }, { value: "drop3", label: "Drop 3" }], layerMode, (v: string) => { setLayerMode(v); if (v === "penta" || v === "mixo") setFrame("0"); }, [9, 10, 10, 7, 7], "nine-layers");
 
   const tabsBtn = (label: string, o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string, wrap?: boolean, size?: number) => <Tabs label={label} options={o} value={v} onChange={on} weights={weights} className={className} wrap={wrap} size={size} />;
   const segBtn = (o: { value: string; label: string }[], v: string, on: (x: string) => void, weights?: number[], className?: string) => <Seg options={o} value={v} onChange={on} weights={weights} className={className} />;
   const ink = spot !== null ? "rgba(77,53,51,0.2)" : INK;
   const head = (t: string, extra?: string) => (
     <h2 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.4px", color: ink, transition: "color 260ms ease", backgroundColor: PAGE, margin: 0 }}>
-      {t}{extra ? <span style={{ fontFamily: SANS, fontSize: 12.5, color: INK2, backgroundColor: PAGE, letterSpacing: 0, marginLeft: 8 }}>{extra}</span> : null}
+      {chordify(t)}{extra ? <span style={{ fontFamily: SANS, fontSize: 12.5, color: INK2, backgroundColor: PAGE, letterSpacing: 0, marginLeft: 8 }}>{extra}</span> : null}
     </h2>
   );
   const line = (t: ReactNode) => <p style={{ fontFamily: SANS, fontSize: 14, fontWeight: 350, lineHeight: "20px", letterSpacing: "-0.14px", color: ink, transition: "color 260ms ease", backgroundColor: PAGE, margin: 0 }}>{t}</p>;
@@ -720,12 +787,14 @@ export default function App() {
   // The same dot showing the interval (3, 5, b7) instead of the note name; tapping it still lights that note.
   const ivChips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`ic${d}`}>{i > 0 ? " " : ""}{chip(d, eff, d === eff ? "R" : iv(d))}</span>);
   // Chord names in running text are bold, so they read as names and not as ordinary words.
-  const B = (props: { children: ReactNode }): ReactNode => <strong style={{ fontWeight: 700 }}>{props.children}</strong>;
+  // "a" or "an" for the note name that follows (an A, an E, an F; a C, a G...).
+  const an = (note: string): string => (["A", "E", "F"].includes(note[0]) ? "an" : "a");
+  const B = (props: { children: ReactNode }): ReactNode => <strong style={{ fontWeight: 700 }}>{chordChildren(props.children)}</strong>;
   // A chord name that is a synonym of the others is a button: tap it to count the board's intervals from that chord's root (tap again to go back to the root).
   const Syn = (props: { d: number; children: ReactNode }): ReactNode => {
     const on = frame === String(props.d);
     return (
-      <button type="button" aria-pressed={on} aria-label={`Show the intervals from ${n(props.d)}`} onClick={() => { setShow("intervals"); setFrame(on && props.d !== 0 ? "0" : String(props.d)); }} style={{ display: "inline", padding: "0 3px", margin: 0, border: 0, borderRadius: 6, boxShadow: "none", cursor: "pointer", font: "inherit", fontWeight: 700, color: ink, backgroundColor: on ? "#e3d8d6" : PAGE, textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{props.children}</button>
+      <button type="button" aria-pressed={on} aria-label={`Show the intervals from ${n(props.d)}`} onClick={() => { setShow("intervals"); setFrame(on && props.d !== 0 ? "0" : String(props.d)); }} style={{ display: "inline", padding: "0 3px", margin: 0, border: 0, borderRadius: 6, boxShadow: "none", cursor: "pointer", font: "inherit", fontWeight: 700, color: ink, backgroundColor: on ? "#e3d8d6" : PAGE, textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{chordChildren(props.children)}</button>
     );
   };
   const chips = (ds: number[]): ReactNode => ds.map((d: number, i: number) => <span key={`cs${d}`}>{i > 0 ? " " : ""}{chip(d)}</span>);
@@ -745,7 +814,7 @@ export default function App() {
     switch (kind) {
       case "c7": return { head: `${I}7, the chord.`, beats: [
         { text: <><B>{I}7</B> is four notes: {chips(CHORD)}.</>, name: `${I}7` },
-        { text: <>{chip(0)} is the root, the note the chord is named for. It is the {ivChips([0])}.</>, name: `${I}7` },
+        { text: <>{chip(0)} is the root, the note the chord is named for: the red {ivChips([0])}.</>, name: `${I}7` },
         { text: <>{chip(4)}, {chip(7)} and {chip(10)} are the {ivChips([4, 7, 10])}. They give <B>{I}7</B> the dominant sound.</>, name: `${I}7` },
       ] };
       case "lose": return { head: "Rootless Chords.", beats: [
@@ -756,17 +825,17 @@ export default function App() {
         { text: <>Now add one note: the {ivChips([2])}, {chip(2)}. It sits a whole step above the root, {chip(0)}.</>, name: `${n(2)}, the 9 of ${I}` },
         { text: <>{chips(ARP)}: four notes again, now with a new color.</>, name: `${I}9 Rootless` },
         { text: <>These four notes, {chips(ARP)}, are <Syn d={4}>{III}{"\u00f8"}</Syn> or <Syn d={7}>{V}m6</Syn> or a rootless <Syn d={0}>{I}9</Syn>.</>, name: `${I}9 Rootless` },
-        { text: <>Try it: over <B>{I}7</B>, play an <Syn d={4}>{III}{"\u00f8"}</Syn> or <Syn d={7}>{V}m6</Syn> arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
+        { text: <>Try it: over <Syn d={0}>{I}7</Syn>, play {an(III)} <Syn d={4}>{III}{"\u00f8"}</Syn> or <Syn d={7}>{V}m6</Syn> arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
       ] };
       case "names": return { head: "Chord Synonyms.", beats: [
         { text: <>Read the same four notes from {chip(4, 4)}: {ivChips([4, 7, 10, 2])}. That is <B>{III}{"\u00f8"}</B>.</>, name: `${III}\u00f8` },
         { text: <>Read them from {chip(7, 7)}: {ivChips([7, 10, 2, 4])}. That is <B>{V}m6</B>.</>, name: `${V}m6` },
-        { text: <>Over a {chip(0, 0)} bass they are a rootless <Syn d={0}>{I}9</Syn>. Same notes, three names.</>, name: `${I}9 Rootless` },
+        { text: <>Over {an(I)} {chip(0, 0)} bass they are a rootless <Syn d={0}>{I}9</Syn>. Same notes, three names.</>, name: `${I}9 Rootless` },
       ] };
       case "penta": return { head: "The dominant pentatonic.", beats: [
         { text: <>Start from those four notes, {chips(ARP)}.</>, name: `${I}9 Rootless` },
-        { text: <>Put the root back: {chips(PENTA)} is the <B>{I} dominant pentatonic</B>, a box you already know.</>, name: `${I} dominant pentatonic` },
-        { text: <>Inside it hide the <Syn d={4}>{III}{"\u00f8"}</Syn> and <Syn d={7}>{V}m6</Syn> arpeggios you just built.</>, name: `${I} dominant pentatonic` },
+        { text: <>Put the root back: {chips(PENTA)} is the <B>{I} dominant pentatonic</B>.</>, name: `${I} Dominant Pentatonic` },
+        { text: <>Inside it hide the <Syn d={4}>{III}{"\u00f8"}</Syn> and <Syn d={7}>{V}m6</Syn> arpeggios you just built.</>, name: `${I} Dominant Pentatonic` },
       ] };
       case "mixo": return { head: `${I} Mixolydian.`, beats: [
         { text: <>Where it all lives: the rootless <Syn d={0}>{I}9</Syn>, <Syn d={4}>{III}{"\u00f8"}</Syn> and <Syn d={7}>{V}m6</Syn> notes, {chips(ARP)}, are four notes of <B>{I} Mixolydian</B>.</>, name: `${I} Mixolydian` },
@@ -778,8 +847,8 @@ export default function App() {
       ] };
       default: return { head: "Play it as a chord.", beats: [
         { text: <>Play four of the notes together: Drop 2. That is <Syn d={4}>{III}{"\u00f8"}</Syn> on the top four strings, or <Syn d={0}>{I}9</Syn> without its root.</>, name: dr(cur.drop, "Drop 2") },
-        { text: <>Drop 3: move the top note down to the low {chip(4)} string. New bass, new name.</>, name: dr(cur.drop3, "Drop 3") },
-        { text: <>Your turn: play the <Syn d={4}>{III}{"\u00f8"}</Syn> arpeggio over <B>{I}7</B>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${III}\u00f8` },
+        { text: <>Drop 3: move the top note down to the low <B>E</B> string, for a new bass note.</>, name: dr(cur.drop3, "Drop 3") },
+        { text: <>Your turn: play the <Syn d={4}>{III}{"\u00f8"}</Syn> arpeggio over <Syn d={0}>{I}7</Syn>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${III}\u00f8` },
       ] };
     }
   };
@@ -802,23 +871,28 @@ export default function App() {
   // The bold chord name under the board.
   // Explore's name block above the board: the chord (or voicing) in big bold type; a Drop voicing adds its name underneath.
   const nameEff = show === "notes" ? 0 : eff;
-  // "Rootless" only where the root is really left out (the arpeggio and the Drop voicings); the pentatonic and Mixolydian layers include it.
-  const frameName = nameEff === 0 ? (mode === "penta" || mode === "mixo" ? `${I}9` : `${I}9 Rootless`) : nameEff === 4 ? `${III}\u00f8` : `${V}m6`;
-  const exTitle = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : frameName;
+  // "Rootless" because the chord layers (arpeggio, Drop voicings) leave the root out.
+  const frameName = nameEff === 0 ? `${I}9 Rootless` : nameEff === 4 ? `${III}\u00f8` : `${V}m6`;
+  // The scale layers are named for the scale; the chord layers (arpeggio, Drop voicings) for the chord.
+  const exTitle = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : mode === "penta" ? `${I} Dominant Pentatonic` : mode === "mixo" ? `${I} Mixolydian` : frameName;
   // Only a Drop 2 / Drop 3 voicing gets a second line; every other layer is just the chord, like a chord diagram.
   const exSub = mode === "grip" || mode === "drop3" ? LAYER_NAME[mode] : "";
   const caption = cb ? cb.name : `${LAYER_NAME[mode]}${voicing ? ` \u00b7 ${voicing}` : ""}`;
+  // The name above the board, on every step: the chord (or scale) big and bold; a Drop voicing adds its name underneath.
+  const gParts = caption.split(" \u00b7 ");
+  const nameTitle = guided ? gParts[0] : exTitle;
+  const nameSub = guided ? (gParts[1] ?? "") : exSub;
   const frameBase = eff === 0 ? `${I}9` : eff === 4 ? `${III}\u00f8` : `${V}m6`;
-  const shareName = `${frameBase}-shape${cur.p + 1}-fret${cur.lo}-${LAYER_NAME[mode]}`.toLowerCase().replace(/\u00f8/g, "o").replace(/#/g, "sharp").replace(/[^a-z0-9-]/g, "") + ".png";
+  const shareName = `${frameBase}-shape${cur.p + 1}-fret${cur.lo}-${LAYER_NAME[mode]}`.toLowerCase().replace(/\u00f8/g, "o").replace(/\u266f/g, "sharp").replace(/\u266d/g, "b").replace(/[^a-z0-9-]/g, "") + ".png";
   // Share: a plain paper-white PNG with only the bold chord name and the diagram, handed to the native share sheet (or downloaded
   // where the browser has none).
   const sharePng = async (): Promise<void> => {
     const svg = document.getElementById("nine-board") as SVGSVGElement | null;
     if (!svg) return;
-    try { await document.fonts.ready; } catch { /* draw with fallbacks */ }
+    try { await document.fonts.load(`400 88px ${REALBOOK}`, `${nameTitle}\u266d\u266f`); await document.fonts.ready; } catch { /* draw with fallbacks */ }
     const W = 1080;
     const M = 80;
-    const shareTitle = guided ? caption : exTitle;
+    const shareTitle = nameTitle;
     // The board: a static copy of the live SVG at its final state (no fades, no animations).
     const clone = svg.cloneNode(true) as SVGSVGElement;
     const vb = svg.viewBox.baseVal;
@@ -875,12 +949,19 @@ export default function App() {
     ctx.fillStyle = PAGE;
     ctx.fillRect(0, 0, W, H);
     // The name: bold, centred, as large as fits on one line.
-    let fs = 88;
-    ctx.font = `700 ${fs}px ${SANS}`;
-    while (fs > 40 && ctx.measureText(shareTitle).width > W - 2 * M) { fs -= 4; ctx.font = `700 ${fs}px ${SANS}`; }
+    // Drawn in pieces so the flats, sharps and extension numbers can be raised and smaller, as on screen.
+    const pieces = titlePieces(shareTitle);
+    const widthAt = (px: number): number => pieces.reduce((w: number, x: TitlePiece) => { ctx.font = `400 ${px * x.scale}px ${REALBOOK}`; return w + ctx.measureText(x.t).width + (x.after ?? 0) * px; }, 0);
+    let fs = 104;
+    while (fs > 44 && widthAt(fs) > W - 2 * M) fs -= 4;
     ctx.fillStyle = INK;
-    ctx.textAlign = "center";
-    ctx.fillText(shareTitle, W / 2, M + 84);
+    ctx.textAlign = "left";
+    let tx = (W - widthAt(fs)) / 2;
+    pieces.forEach((x: TitlePiece) => {
+      ctx.font = `400 ${fs * x.scale}px ${REALBOOK}`;
+      ctx.fillText(x.t, tx, M + 90 - fs * x.rise);
+      tx += ctx.measureText(x.t).width + (x.after ?? 0) * fs;
+    });
     ctx.drawImage(img, M, M + TITLE_H, bw, bh);
     URL.revokeObjectURL(url);
     const blob = await new Promise<Blob | null>((res: (b: Blob | null) => void) => cv.toBlob(res, "image/png"));
@@ -954,6 +1035,8 @@ export default function App() {
     + " #nine-root .nine-q{transition:opacity 260ms ease}"
     + " #nine-root[data-guided='1'] .nine-quiet{opacity:.42} #nine-root[data-guided='1'] .nine-quiet:hover,#nine-root[data-guided='1'] .nine-quiet:focus-within{opacity:1}"
     + " #nine-root[data-spot='1'] .nine-q,#nine-root[data-spot='1'] .nine-quiet{opacity:.14!important}"
+    + " @font-face{font-family:'MuseJazz Text';src:url('/fonts/MuseJazzText.otf') format('opentype');font-display:swap}"
+    + " @font-face{font-family:'MuseJazz Text';src:url('/fonts/MuseJazz.otf') format('opentype');unicode-range:U+266D,U+266F;font-display:swap}"
     + " @keyframes nine-in{from{opacity:0}to{opacity:1}} @keyframes nine-lbl{from{opacity:0}to{opacity:1}}"
     + " @keyframes nine-r{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}} @keyframes nine-l{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}"
     + " @keyframes nine-pop{from{opacity:0;transform:translateY(-4px) scale(.96)}to{opacity:1;transform:none}}"
@@ -992,24 +1075,23 @@ export default function App() {
           <h1 style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, lineHeight: "26px", letterSpacing: "-0.5px", color: INK, backgroundColor: PAGE, margin: 0 }}>Dominant Pentatonics</h1>
           <a href="/" style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 12.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE, textDecoration: "none" }}>{"← All lessons"}</a>
         </div>
-        {card === 0 && beat === 0 ? (
-          <div className={helpOpen ? "nine-q" : "nine-q nine-quiet"} style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, backgroundColor: PAGE }}>
-              {HELPFUL.length > 0 ? <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{helpOpen ? "Helps to know \u25b4" : "Helps to know \u25be"}</button> : null}
-              <button type="button" id="nine-tutorial" onClick={startTutorial} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>Show tutorial</button>
-            </div>
-            {helpOpen && HELPFUL.length > 0 ? (
-              <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
-                {HELPFUL.map((h: Helpful) => (
-                  <li key={h.topic} style={{ backgroundColor: PAGE }}>
-                    {h.href ? <a href={h.href} style={{ color: INK, backgroundColor: PAGE }}>{h.topic}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{h.topic}</span>}
-                    {h.href ? "" : " (coming soon)"}: {h.why}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+        {/* On every step, so the page never changes height as you move between steps. */}
+        <div className={helpOpen ? "nine-q" : "nine-q nine-quiet"} style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, backgroundColor: PAGE }}>
+            {HELPFUL.length > 0 ? <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{helpOpen ? "Helps to know \u25b4" : "Helps to know \u25be"}</button> : null}
+            <button type="button" id="nine-tutorial" onClick={startTutorial} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>Show tutorial</button>
           </div>
-        ) : null}
+          {helpOpen && HELPFUL.length > 0 ? (
+            <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
+              {HELPFUL.map((h: Helpful) => (
+                <li key={h.topic} style={{ backgroundColor: PAGE }}>
+                  {h.href ? <a href={h.href} style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</span>}
+                  {h.href ? "" : " (coming soon)"}: {chordify(h.why)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
 
         {/* Step chips: progress and navigation in one row. The bar fills up to the current card; tap any chip to jump. */}
         <nav aria-label="Lesson steps" className="nine-q nine-quiet" style={{ display: "grid", gridTemplateColumns: STEP_LABEL.map((lb: string, i: number) => `minmax(28px,${lb.length + (STEP_LONG[i] ? 4 : 2)}fr)`).join(" "), gap: 3, backgroundColor: PAGE }}>
@@ -1037,7 +1119,9 @@ export default function App() {
           </>) : (<>
             {/* Explore: one control says how the dots are labelled: note names, or intervals counted from the rootless C9, the Eø or the Gm6 (the same four notes, three names). */}
             <div id="nine-labels" aria-label="Label the dots" style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }}>
-              {tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], show === "notes" ? "notes" : frame, (v: string) => { if (v === "notes") { setShow("notes"); setFrame("0"); } else { setShow("intervals"); setFrame(v); } }, [1, 1, 1, 1], undefined, false, 12.5)}
+              {scaleLayer
+                ? tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: "Intervals" }], show === "notes" ? "notes" : "0", (v: string) => { setShow(v === "notes" ? "notes" : "intervals"); setFrame("0"); }, [1, 1], undefined, false, 12.5)
+                : tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], show === "notes" ? "notes" : frame, (v: string) => { if (v === "notes") { setShow("notes"); setFrame("0"); } else { setShow("intervals"); setFrame(v); } }, [1, 1, 1, 1], undefined, false, 12.5)}
             </div>
           </>)}
             {guided ? settingsToggle : null}
@@ -1050,7 +1134,7 @@ export default function App() {
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 16, alignItems: "center", backgroundColor: PAGE }}>
                   <Field label="" style={{ gap: 0 }}>
                     <select value={keyId} onChange={(e: ChangeEvent<HTMLSelectElement>) => { const nk = KEYS.find((x: KeyDef) => x.id === e.target.value) ?? KEYS[0]; const list = instances(nk); let best = homeIndex(list); list.forEach((q: Pos, i: number) => { if (q.p === cur.p && (list[best].p !== cur.p || Math.abs(q.lo - cur.lo) < Math.abs(list[best].lo - cur.lo))) best = i; }); setInst(best); setKeyId(e.target.value); }} style={{ height: CH, width: "100%", boxSizing: "border-box", fontFamily: SANS, fontSize: CFS, fontWeight: 500, color: INK, backgroundColor: PAGE, border: BORDER, borderRadius: RAD, padding: "0 26px 0 12px", lineHeight: "18px", colorScheme: "only light", cursor: "pointer", backgroundImage: "linear-gradient(45deg, transparent 50%, #4d3533 50%), linear-gradient(135deg, #4d3533 50%, transparent 50%)", backgroundPosition: "calc(100% - 15px) 50%, calc(100% - 10px) 50%", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat" }}>
-                      {KEYS.map((x: KeyDef) => <option key={x.id} value={x.id} style={{ color: INK, backgroundColor: PAGE }}>{`Key of ${x.id}`}</option>)}
+                      {KEYS.map((x: KeyDef) => <option key={x.id} value={x.id} style={{ color: INK, backgroundColor: PAGE }}>{`Key of ${flat(x.id)}`}</option>)}
                     </select>
                   </Field>
                   <Check on={lefty} label="Left-handed" onClick={() => setLefty(!lefty)} />
@@ -1085,22 +1169,20 @@ export default function App() {
           })}
         </div>
         )}
-        {!guided ? (
-          <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
-            {/* Equal air above the name and between it and the first dot: the board has its own 9px of padding, so the block starts 9px down; a lone name sits 9px lower in the block so the board never moves. */}
-            <div style={{ minWidth: 0, marginTop: exSub ? 0 : 9, backgroundColor: PAGE }}>
-              <div id="nine-name-title" style={{ fontFamily: SANS, fontSize: 24, fontWeight: 700, lineHeight: "28px", letterSpacing: "-0.3px", color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{exTitle}</div>
-              {exSub ? <div id="nine-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{exSub}</div> : null}
-            </div>
-            <button type="button" className="nine-icon" id="nine-share-quick" aria-label="Share this diagram as an image" onClick={() => { void sharePng(); }} style={{ position: "absolute", right: 0, top: exSub ? 9 : 18, display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
-              <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
-                <path d="M9 11.5 V2.5 M5.8 5.5 L9 2.3 L12.2 5.5 M3.5 9 V14.5 H14.5 V9" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
-              </svg>
-            </button>
+        <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
+          {/* Equal air above the name and between it and the first dot: the board has its own 9px of padding, so the block starts 9px down; a lone name sits 9px lower in the block so the board never moves. */}
+          <div style={{ minWidth: 0, marginTop: nameSub ? 0 : 6, backgroundColor: PAGE }}>
+            <div id="nine-name-title" style={{ fontFamily: REALBOOK, fontSize: nameTitle.length > 20 ? 25 : 32, fontWeight: 400, lineHeight: "34px", letterSpacing: 0, color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{titleNodes(nameTitle)}</div>
+            {nameSub ? <div id="nine-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{nameSub}</div> : null}
           </div>
-        ) : null}
+          <button type="button" className="nine-icon" id="nine-share-quick" aria-label="Share this diagram as an image" onClick={() => { void sharePng(); }} style={{ position: "absolute", right: 0, top: nameSub ? 9 : 18, display: "inline-flex", alignItems: "center", justifyContent: "center", height: 32, width: 32, padding: 0, margin: 0, flex: "0 0 auto", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", color: INK, backgroundColor: PAGE }}>
+            <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
+              <path d="M9 11.5 V2.5 M5.8 5.5 L9 2.3 L12.2 5.5 M3.5 9 V14.5 H14.5 V9" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ stroke: INK }} />
+            </svg>
+          </button>
+        </div>
         <div style={{ position: "relative", backgroundColor: PAGE }} onTouchStart={(e: { touches: ArrayLike<{ clientX: number; clientY: number }> }) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; }} onTouchEnd={(e: { changedTouches: ArrayLike<{ clientX: number; clientY: number }> }) => { const s = touchRef.current; touchRef.current = null; if (!s) return; const t = e.changedTouches[0]; const dx = t.clientX - s.x; const dy = t.clientY - s.y; if (!scrollOn && Math.abs(dx) > 48 && Math.abs(dy) < 36) stepShape(dx < 0 ? (lefty ? -1 : 1) : (lefty ? 1 : -1)); }}>
-          <Board key={`board${jump}-${fullOn ? 1 : 0}-${scrollOn ? 1 : 0}`} full={fullOn} scroll={scrollOn} onPlay={playDot} onSettle={settleScroll} center={(cur.lo + cur.hi) / 2} band={fullOn ? [cur.lo, cur.hi] : undefined} k={k} shown={shown} wl={Math.max(0, Math.min(cur.lo - 1, MAXF - 6))} step={bt ? bt.step : MODE_STEP[mode]} dim={dimSet} spot={spot} labelOf={labelOf} ringDeg={ringDeg} lefty={lefty} drop2={mode === "drop3" ? cur.drop3 : cur.drop} />
+          <Board plain9={!guided} ghostRoot={ghostRoot} key={`board${jump}-${fullOn ? 1 : 0}-${scrollOn ? 1 : 0}`} full={fullOn} scroll={scrollOn} onPlay={playDot} onSettle={settleScroll} center={(cur.lo + cur.hi) / 2} band={fullOn ? [cur.lo, cur.hi] : undefined} k={k} shown={shown} wl={Math.max(0, Math.min(cur.lo - 1, MAXF - 6))} step={bt ? bt.step : MODE_STEP[mode]} dim={dimSet} spot={spot} labelOf={labelOf} ringDeg={ringDeg} lefty={lefty} drop2={mode === "drop3" ? cur.drop3 : cur.drop} />
           {(guided ? [] : [-1, 1]).map((d: number) => {
             const ok = canShape(d);
             const onLeft = lefty ? d > 0 : d < 0;
@@ -1125,10 +1207,7 @@ export default function App() {
             })}
           </div>
         ) : null}
-        {guided ? (
-        <div id="nine-name" aria-live="polite" style={{ height: 28, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SANS, fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px", color: INK, backgroundColor: PAGE }}>{caption}</div>
-        ) : null}
-        <div className="nine-q" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
+        <div id="nine-nav" className="nine-q" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
           <button type="button" className="nine-btn" style={{ ...btn(false, card === 0 && beat === 0), height: 44, fontSize: 15 }} disabled={card === 0 && beat === 0} onClick={() => prev()}>{"\u2190 Back"}</button>
           <button type="button" className="nine-btn nine-btn-primary" style={{ ...btn(true, false), height: 44, fontSize: 15 }} onClick={() => next()}>{card === total - 1 ? "Start over" : "Continue \u2192"}</button>
         </div>
