@@ -7,11 +7,15 @@ const RED = "#e8372a";
 const TEAL = "#0f766e";
 const INK = "#4d3533";
 
+// A double flat or sharp (\u266d\u266d7, B\u266d\u266d) is two signs with a little air between them, so it reads as two and not one blob.
+function spaced(label: string): ReactNode {
+  return label.split(/([\u266d\u266f]{2})/).map((part: string, i: number) => (i % 2 === 1 ? <span key={i} data-dbl="1" style={{ letterSpacing: "0.14em", marginRight: "0.08em" }}>{part}</span> : part));
+}
 export function Pip(props: { label: string; root?: string; ninth?: string }) {
   const { label, root, ninth } = props;
   const bg = label === "R" || label === root ? RED : label === "9" || label === ninth ? TEAL : INK;
   return (
-    <span data-pip="1" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, padding: "0 5px", margin: "0 1px", boxSizing: "border-box", verticalAlign: "baseline", borderRadius: 9, fontFamily: "'KMR Melange Grotesk', -apple-system, 'Helvetica Neue', Arial, sans-serif", fontSize: 11, fontWeight: 700, lineHeight: "18px", letterSpacing: 0, color: "#ffffff", backgroundColor: bg }}>{label}</span>
+    <span data-pip="1" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, padding: "0 5px", margin: "0 1px", boxSizing: "border-box", verticalAlign: "baseline", borderRadius: 9, fontFamily: "'KMR Melange Grotesk', -apple-system, 'Helvetica Neue', Arial, sans-serif", fontSize: 11, fontWeight: 700, lineHeight: "18px", letterSpacing: 0, color: "#ffffff", backgroundColor: bg }}>{spaced(label)}</span>
   );
 }
 

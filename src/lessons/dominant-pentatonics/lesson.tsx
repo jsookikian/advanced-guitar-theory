@@ -3,13 +3,16 @@ import type { CSSProperties, ChangeEvent, ReactNode } from "grok/canvas";
 import { pluck, playPhrase, stopAll, setInstrument, INSTRUMENTS } from "../../shared/audio";
 import type { InstrumentId } from "../../shared/audio";
 import { SITE_ROOT } from "../../shared/site-root";
-import Tutorial from "./Tutorial";
-import type { TutStep } from "./Tutorial";
+import Tutorial from "../../shared/Tutorial";
+import type { TutStep } from "../../shared/Tutorial";
+import { KEYS, flat, titlePieces, chordify, chordChildren, titleNodes, chordSymbol, asciiName } from "../../shared/notation";
+import type { ChordKind } from "../../shared/notation";
+import type { KeyDef, TitlePiece } from "../../shared/notation";
+import { Tabs, lockPaint } from "../../shared/ui";
 
 type Step = 1 | 2 | 3 | 4;
 
 interface Dot { s: number; f: number; d: number; add: boolean }
-interface KeyDef { id: string; pc: number; letter: number }
 interface Pos { p: number; sh: number; octave: boolean; dots: Dot[]; lo: number; hi: number; drop: Set<string>; drop3: Set<string> }
 
 // The sheet's palette, from the source's CSS. Painted as literals (and re-asserted as !important inline) so the page stays a white sheet on any host.
@@ -53,12 +56,6 @@ const DROP2: number[][][] = [
   [[2, 14], [3, 15], [4, 15], [5, 15]],
 ];
 
-const KEYS: KeyDef[] = [
-  { id: "C", pc: 0, letter: 0 }, { id: "Db", pc: 1, letter: 1 }, { id: "D", pc: 2, letter: 1 },
-  { id: "Eb", pc: 3, letter: 2 }, { id: "E", pc: 4, letter: 2 }, { id: "F", pc: 5, letter: 3 },
-  { id: "F#", pc: 6, letter: 3 }, { id: "G", pc: 7, letter: 4 }, { id: "Ab", pc: 8, letter: 5 },
-  { id: "A", pc: 9, letter: 5 }, { id: "Bb", pc: 10, letter: 6 }, { id: "B", pc: 11, letter: 6 },
-];
 const LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 const STEPS: Record<number, number> = { 0: 0, 2: 1, 4: 2, 5: 3, 7: 4, 9: 5, 10: 6 };
@@ -67,40 +64,7 @@ const PENTA = [0, 2, 4, 7, 10];
 const ARP = [4, 7, 10, 2];
 const GM6 = [7, 10, 2, 4];
 const CHORD = [0, 4, 7, 10];
-const PAINT = ["color", "background-color", "fill", "stroke", "border-color", "border-left-color"];
 
-// Accidentals are the real symbols (\u266d \u266f), never a letter b or a #. `flat` converts a key id such as "Bb" or "F#" for display.
-const flat = (id: string): string => id.replace(/(?<=[A-G])b/g, "\u266d").replace(/#/g, "\u266f");
-
-// A chord name is set like a lead sheet: the root letter stays on the line, and everything that follows it (the quality and extension: m6,
-// \u00f8, 9, 7) is raised and smaller, as are flats and sharps. `titlePieces` cuts a name into those parts; the screen and the share image
-// both draw from it. Words after the chord ("Rootless", "Dominant Pentatonic") and a slash bass note stay on the line.
-interface TitlePiece { t: string; scale: number; rise: number; after?: number }
-function titlePieces(text: string): TitlePiece[] {
-  const acc = (t: string): TitlePiece => ({ t, scale: 0.92, rise: 0.5 });
-  // A slash chord gets a little extra air after the "/" (Gm6/ E).
-  const rest = (t: string): TitlePiece[] => t.split(/([\u266d\u266f]|\/)/).filter((x: string) => x !== "").map((x: string) => (x === "\u266d" || x === "\u266f" ? acc(x) : x === "/" ? { t: x, scale: 1, rise: 0, after: 0.34 } : { t: x, scale: 1, rise: 0 }));
-  const m = /^([A-G])([\u266d\u266f]{0,2})(m\d*|\u00f8\d*|\d+)?(.*)$/.exec(text);
-  if (!m || (!m[2] && !m[3])) return rest(text); // no accidental, quality or number after the letter: not a chord to set in pieces ("Arpeggio", "Drop 2", "C Mixolydian")
-  const out: TitlePiece[] = [{ t: m[1], scale: 1, rise: 0 }];
-  if (m[2]) out.push(acc(m[2]));
-  if (m[3]) out.push({ t: m[3], scale: 0.84, rise: 0.38 });
-  return [...out, ...rest(m[4])];
-}
-// Chord names inside running text (Em7, C9, G\u00f8) get the same lead-sheet treatment; `chordify` finds them in a string.
-function chordify(text: string): ReactNode {
-  return text.split(/([A-G][\u266d\u266f]{0,2}(?:m\d*|\u00f8\d*|\d+)(?![\w\u266d\u266f]))/).map((part: string, i: number) => (i % 2 === 1 ? <span key={i}>{titleNodes(part)}</span> : part));
-}
-// Children of a chord-name component: when they are all text, join them and set the name; otherwise leave them as they are.
-function chordChildren(children: ReactNode): ReactNode {
-  const arr = Array.isArray(children) ? children : [children];
-  return arr.every((x: unknown) => typeof x === "string" || typeof x === "number") ? titleNodes(arr.join("")) : children;
-}
-function titleNodes(text: string): ReactNode {
-  return titlePieces(text).map((x: TitlePiece, i: number) => (x.scale === 1 && !x.after
-    ? x.t
-    : <span key={i} data-sup="1" style={{ fontSize: `${x.scale}em`, position: "relative", top: `-${x.rise}em`, margin: x.after ? `0 ${x.after}em 0 0.02em` : "0 0.02em 0 0.03em" }}>{x.t}</span>));
-}
 
 function spell(k: KeyDef, semi: number): string {
   const l = (k.letter + STEPS[semi]) % 7;
@@ -154,35 +118,6 @@ const CAGED: Record<number, string[]> = {
   4: ["D", "C", "A", "G", "E"],
   7: ["E", "D", "C", "A", "G"],
 };
-
-// Re-assert every inline paint colour as !important, give unpainted HTML elements inherit/transparent,
-// and cancel an inverting filter on any host ancestor, so no host or theme rule can repaint the sheet.
-function lockPaint(root: HTMLElement): void {
-  root.style.setProperty("background-color", PAGE, "important");
-  root.style.setProperty("color", INK, "important");
-  root.style.setProperty("color-scheme", "only light", "important");
-  const filters: string[] = [];
-  let el: HTMLElement | null = root.parentElement;
-  while (el) {
-    const cs = getComputedStyle(el);
-    if (cs.filter && cs.filter.includes("invert")) filters.push(cs.filter);
-    el = el.parentElement;
-  }
-  if (filters.length > 0) root.style.setProperty("filter", filters.join(" "), "important");
-  else root.style.removeProperty("filter");
-  root.querySelectorAll("*").forEach((node: Element) => {
-    const st = (node as HTMLElement).style;
-    if (!st) return;
-    PAINT.forEach((prop: string) => {
-      const v = st.getPropertyValue(prop);
-      if (v && st.getPropertyPriority(prop) !== "important") st.setProperty(prop, v, "important");
-    });
-    if (node instanceof HTMLElement) {
-      if (!st.getPropertyValue("color")) st.setProperty("color", "inherit", "important");
-      if (!st.getPropertyValue("background-color") && !st.getPropertyValue("background-image")) st.setProperty("background-color", "transparent", "important");
-    }
-  });
-}
 
 interface Look { fill: string; stroke: string; sw: number; dashed: boolean; text: string; dotOp: number; textOp: number }
 
@@ -403,21 +338,6 @@ function Seg(props: { options: { value: string; label: string }[]; value: string
   );
 }
 
-// Quiet tabs for Explore's pickers: no boxes, no fills; the chosen one is dark, bold and underlined, the rest are grey text on a hairline.
-function Tabs(props: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; weights?: number[]; className?: string; label: string; wrap?: boolean; size?: number; height?: number }) {
-  const { options, value, onChange } = props;
-  const w = props.weights && props.weights.length === options.length ? props.weights : options.map(() => 1);
-  return (
-    <div role="radiogroup" aria-label={props.label} className={props.className} style={{ display: "grid", gridTemplateColumns: w.map((x: number) => `minmax(0, ${x}fr)`).join(" "), height: props.height ?? 34, borderBottom: `1px solid ${LINE}`, backgroundColor: PAGE, boxSizing: "border-box" }}>
-      {options.map((o: { value: string; label: string }) => {
-        const on = o.value === value;
-        return (
-          <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.value)} style={{ minWidth: 0, padding: 0, border: 0, borderRadius: 0, cursor: "pointer", fontFamily: SANS, fontSize: props.size ?? 13.5, fontWeight: on ? 700 : 400, lineHeight: props.wrap ? "15px" : "20px", whiteSpace: props.wrap ? "normal" : "nowrap", color: on ? INK : INK2, backgroundColor: PAGE, boxShadow: on ? `inset 0 -2px 0 ${INK}` : "none", transition: "color 200ms ease, box-shadow 200ms ease" }}>{titleNodes(o.label)}</button>
-        );
-      })}
-    </div>
-  );
-}
 
 function Field(props: { label: string; children: ReactNode; style?: CSSProperties }) {
   return (
@@ -683,6 +603,7 @@ export default function App() {
   const iv = (d: number): string => ivName(d, eff);
   const n = (d: number): string => spell(k, d);
   const I = n(0);
+  const cs = (r: string, kind: ChordKind): string => chordSymbol(r, kind);
   const III = n(4);
   const V = n(7);
   const notes = (ds: number[]): string => ds.map(n).join(" ");
@@ -743,8 +664,8 @@ export default function App() {
   const vname = (set: Set<string>): string => {
     const ds = [...set].map((key: string) => { const [s, f] = key.split("-").map(Number); return { s, f, d: degOf(s, f, k), add: false }; });
     const bass = ds.reduce((a: Dot, b: Dot) => (pitch(b) < pitch(a) ? b : a));
-    const base = nameFrame === 0 ? `${I}9` : nameFrame === 4 ? `${III}\u00f8` : `${V}m6`;
-    if (nameFrame === 0) return `${I}9 Rootless`;
+    const base = nameFrame === 0 ? `${cs(I, "dom9")}` : nameFrame === 4 ? `${cs(III, "hdim")}` : `${cs(V, "m6")}`;
+    if (nameFrame === 0) return `${cs(I, "dom9")} Rootless`;
     return bass.d === nameFrame ? base : `${base}/${n(bass.d)}`;
   };
   const shapeLabel = (q: Pos): string => `Shape ${q.p + 1}`;
@@ -813,43 +734,43 @@ export default function App() {
   const beatContent = (kind: string): { head: string; beats: { text: ReactNode; name: string }[] } => {
     const dr = (set: Set<string>, label: string): string => `${vname(set)} \u00b7 ${label}`;
     switch (kind) {
-      case "c7": return { head: `${I}7, the chord.`, beats: [
-        { text: <><B>{I}7</B> is four notes: {chips(CHORD)}.</>, name: `${I}7` },
-        { text: <>{chip(0)} is the root, the note the chord is named for: the red {ivChips([0])}.</>, name: `${I}7` },
-        { text: <>{chip(4)}, {chip(7)} and {chip(10)} are the {ivChips([4, 7, 10])}. They give <B>{I}7</B> the dominant sound.</>, name: `${I}7` },
+      case "c7": return { head: `${cs(I, "dom7")}, the chord.`, beats: [
+        { text: <><B>{cs(I, "dom7")}</B> is four notes: {chips(CHORD)}.</>, name: `${cs(I, "dom7")}` },
+        { text: <>{chip(0)} is the root, the note the chord is named for: the red {ivChips([0])}.</>, name: `${cs(I, "dom7")}` },
+        { text: <>{chip(4)}, {chip(7)} and {chip(10)} are the {ivChips([4, 7, 10])}. They give <B>{cs(I, "dom7")}</B> the dominant sound.</>, name: `${cs(I, "dom7")}` },
       ] };
       case "lose": return { head: "Rootless Chords.", beats: [
-        { text: <>When you comp behind a soloist, the bass player usually plays the root, every {chip(0)}. So you can leave it out.</>, name: `${I}7 Rootless` },
-        { text: <>{chips([4, 7, 10])} are what is left, and they still say <B>{I}7</B>: the {ivChips([4, 7, 10])} carry the sound.</>, name: `${I}7 Rootless` },
+        { text: <>When you comp behind a soloist, the bass player usually plays the root, every {chip(0)}. So you can leave it out.</>, name: `${cs(I, "dom7")} Rootless` },
+        { text: <>{chips([4, 7, 10])} are what is left, and they still say <B>{cs(I, "dom7")}</B>: the {ivChips([4, 7, 10])} carry the sound.</>, name: `${cs(I, "dom7")} Rootless` },
       ] };
       case "nine": return { head: "Add the 9.", beats: [
         { text: <>Now add one note: the {ivChips([2])}, {chip(2)}. It sits a whole step above the root, {chip(0)}.</>, name: `${n(2)}, the 9 of ${I}` },
-        { text: <>{chips(ARP)}: four notes again, now with a new color.</>, name: `${I}9 Rootless` },
-        { text: <>These four notes, {chips(ARP)}, are <Syn d={4}>{III}{"\u00f8"}</Syn> or <Syn d={7}>{V}m6</Syn> or a rootless <Syn d={0}>{I}9</Syn>.</>, name: `${I}9 Rootless` },
-        { text: <>Try it: over <Syn d={0}>{I}7</Syn>, play {an(III)} <Syn d={4}>{III}{"\u00f8"}</Syn> or <Syn d={7}>{V}m6</Syn> arpeggio. Tap Hear it first, then play it yourself.</>, name: `${I}7` },
+        { text: <>{chips(ARP)}: four notes again, now with a new color.</>, name: `${cs(I, "dom9")} Rootless` },
+        { text: <>These four notes, {chips(ARP)}, are <Syn d={4}>{cs(III, "hdim")}</Syn> or <Syn d={7}>{cs(V, "m6")}</Syn> or a rootless <Syn d={0}>{cs(I, "dom9")}</Syn>.</>, name: `${cs(I, "dom9")} Rootless` },
+        { text: <>Try it: over <Syn d={0}>{cs(I, "dom7")}</Syn>, play {an(III)} <Syn d={4}>{cs(III, "hdim")}</Syn> or <Syn d={7}>{cs(V, "m6")}</Syn> arpeggio. Tap Hear it first, then play it yourself.</>, name: `${cs(I, "dom7")}` },
       ] };
       case "names": return { head: "Chord Synonyms.", beats: [
-        { text: <>Read the same four notes from {chip(4, 4)}: {ivChips([4, 7, 10, 2])}. That is <B>{III}{"\u00f8"}</B>.</>, name: `${III}\u00f8` },
-        { text: <>Read them from {chip(7, 7)}: {ivChips([7, 10, 2, 4])}. That is <B>{V}m6</B>.</>, name: `${V}m6` },
-        { text: <>Over {an(I)} {chip(0, 0)} bass they are a rootless <Syn d={0}>{I}9</Syn>. Same notes, three names.</>, name: `${I}9 Rootless` },
+        { text: <>Read the same four notes from {chip(4, 4)}: {ivChips([4, 7, 10, 2])}. That is <B>{cs(III, "hdim")}</B>.</>, name: `${cs(III, "hdim")}` },
+        { text: <>Read them from {chip(7, 7)}: {ivChips([7, 10, 2, 4])}. That is <B>{cs(V, "m6")}</B>.</>, name: `${cs(V, "m6")}` },
+        { text: <>Over {an(I)} {chip(0, 0)} bass they are a rootless <Syn d={0}>{cs(I, "dom9")}</Syn>. Same notes, three names.</>, name: `${cs(I, "dom9")} Rootless` },
       ] };
       case "penta": return { head: "The dominant pentatonic.", beats: [
-        { text: <>Start from those four notes, {chips(ARP)}.</>, name: `${I}9 Rootless` },
+        { text: <>Start from those four notes, {chips(ARP)}.</>, name: `${cs(I, "dom9")} Rootless` },
         { text: <>Put the root back: {chips(PENTA)} is the <B>{I} dominant pentatonic</B>.</>, name: `${I} Dominant Pentatonic` },
-        { text: <>Inside it hide the <Syn d={4}>{III}{"\u00f8"}</Syn> and <Syn d={7}>{V}m6</Syn> arpeggios you just built.</>, name: `${I} Dominant Pentatonic` },
+        { text: <>Inside it hide the <Syn d={4}>{cs(III, "hdim")}</Syn> and <Syn d={7}>{cs(V, "m6")}</Syn> arpeggios you just built.</>, name: `${I} Dominant Pentatonic` },
       ] };
       case "mixo": return { head: `${I} Mixolydian.`, beats: [
-        { text: <>Where it all lives: the rootless <Syn d={0}>{I}9</Syn>, <Syn d={4}>{III}{"\u00f8"}</Syn> and <Syn d={7}>{V}m6</Syn> notes, {chips(ARP)}, are four notes of <B>{I} Mixolydian</B>.</>, name: `${I} Mixolydian` },
+        { text: <>Where it all lives: the rootless <Syn d={0}>{cs(I, "dom9")}</Syn>, <Syn d={4}>{cs(III, "hdim")}</Syn> and <Syn d={7}>{cs(V, "m6")}</Syn> notes, {chips(ARP)}, are four notes of <B>{I} Mixolydian</B>.</>, name: `${I} Mixolydian` },
         { text: <>The <B>{I} dominant pentatonic</B>, {chips(PENTA)}, is five of its seven.</>, name: `${I} Mixolydian` },
-        { text: <>The other two are the {ivChips([5, 9])}, {chips([5, 9])}. {chip(9)} is the {ivChips([9])}, or {chip(9, eff, "13")}, a safe color tone over <B>{I}7</B>.</>, name: `${I} Mixolydian` },
+        { text: <>The other two are the {ivChips([5, 9])}, {chips([5, 9])}. {chip(9)} is the {ivChips([9])}, or {chip(9, eff, "13")}, a safe color tone over <B>{cs(I, "dom7")}</B>.</>, name: `${I} Mixolydian` },
         { text: <>{chip(5)} is the avoid note: pass through it or resolve down to {chip(4)}.</>, name: `${I} Mixolydian` },
-        { text: <>Where it lands: over <B>{I}7</B> the moving notes are {chips([10, 4, 2])}.</>, name: `${I}7` },
+        { text: <>Where it lands: over <B>{cs(I, "dom7")}</B> the moving notes are {chips([10, 4, 2])}.</>, name: `${cs(I, "dom7")}` },
         { text: <>Resolve to <B>{n(5)}</B>: {chip(10)} falls to {chip(9)}, {chip(4)} rises to {chip(5)}, {chip(2)} falls to {chip(0)}. Each moves one step.</>, name: `${n(5)}` },
       ] };
       default: return { head: "Play it as a chord.", beats: [
-        { text: <>Play four of the notes together: Drop 2. That is <Syn d={4}>{III}{"\u00f8"}</Syn> on the top four strings, or <Syn d={0}>{I}9</Syn> without its root.</>, name: dr(cur.drop, "Drop 2") },
+        { text: <>Play four of the notes together: Drop 2. That is <Syn d={4}>{cs(III, "hdim")}</Syn> on the top four strings, or <Syn d={0}>{cs(I, "dom9")}</Syn> without its root.</>, name: dr(cur.drop, "Drop 2") },
         { text: <>Drop 3: move the top note down to the low <B>E</B> string, for a new bass note.</>, name: dr(cur.drop3, "Drop 3") },
-        { text: <>Your turn: play the <Syn d={4}>{III}{"\u00f8"}</Syn> arpeggio over <Syn d={0}>{I}7</Syn>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${III}\u00f8` },
+        { text: <>Your turn: play the <Syn d={4}>{cs(III, "hdim")}</Syn> arpeggio over <Syn d={0}>{cs(I, "dom7")}</Syn>, then land on {chip(9)} as the chord moves to <B>{n(5)}</B>.</>, name: `${cs(III, "hdim")}` },
       ] };
     }
   };
@@ -873,7 +794,7 @@ export default function App() {
   // Explore's name block above the board: the chord (or voicing) in big bold type; a Drop voicing adds its name underneath.
   const nameEff = show === "notes" ? 0 : eff;
   // "Rootless" because the chord layers (arpeggio, Drop voicings) leave the root out.
-  const frameName = nameEff === 0 ? `${I}9 Rootless` : nameEff === 4 ? `${III}\u00f8` : `${V}m6`;
+  const frameName = nameEff === 0 ? `${cs(I, "dom9")} Rootless` : nameEff === 4 ? `${cs(III, "hdim")}` : `${cs(V, "m6")}`;
   // The scale layers are named for the scale; the chord layers (arpeggio, Drop voicings) for the chord.
   const exTitle = mode === "grip" ? vname(cur.drop) : mode === "drop3" ? vname(cur.drop3) : mode === "penta" ? `${I} Dominant Pentatonic` : mode === "mixo" ? `${I} Mixolydian` : frameName;
   // Only a Drop 2 / Drop 3 voicing gets a second line; every other layer is just the chord, like a chord diagram.
@@ -883,8 +804,8 @@ export default function App() {
   const gParts = caption.split(" \u00b7 ");
   const nameTitle = guided ? gParts[0] : exTitle;
   const nameSub = guided ? (gParts[1] ?? "") : exSub;
-  const frameBase = eff === 0 ? `${I}9` : eff === 4 ? `${III}\u00f8` : `${V}m6`;
-  const shareName = `${frameBase}-shape${cur.p + 1}-fret${cur.lo}-${LAYER_NAME[mode]}`.toLowerCase().replace(/\u00f8/g, "o").replace(/\u266f/g, "sharp").replace(/\u266d/g, "b").replace(/[^a-z0-9-]/g, "") + ".png";
+  const frameBase = eff === 0 ? `${cs(I, "dom9")}` : eff === 4 ? `${cs(III, "hdim")}` : `${cs(V, "m6")}`;
+  const shareName = `${asciiName(frameBase)}-shape${cur.p + 1}-fret${cur.lo}-${asciiName(LAYER_NAME[mode])}.png`;
   // Share: a plain paper-white PNG with only the bold chord name and the diagram, handed to the native share sheet (or downloaded
   // where the browser has none).
   const sharePng = async (): Promise<void> => {
@@ -940,7 +861,8 @@ export default function App() {
     const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml;charset=utf-8" }));
     const img = new Image();
     await new Promise<void>((res: () => void, rej: (e: unknown) => void) => { img.onload = () => res(); img.onerror = (e: unknown) => rej(e); img.src = url; });
-    const TITLE_H = 120;
+    // The chord name, its subtitle line when there is one ("Drop 2"), then the diagram.
+    const TITLE_H = nameSub ? 176 : 120;
     const H = M + TITLE_H + bh + M;
     const cv = document.createElement("canvas");
     cv.width = W;
@@ -963,6 +885,14 @@ export default function App() {
       ctx.fillText(x.t, tx, M + 90 - fs * x.rise);
       tx += ctx.measureText(x.t).width + (x.after ?? 0) * fs;
     });
+    if (nameSub) {
+      ctx.font = `400 34px ${SANS}`;
+      ctx.fillStyle = INK2;
+      ctx.textAlign = "center";
+      let sub = nameSub;
+      while (sub.length > 4 && ctx.measureText(sub).width > W - 2 * M) sub = sub.slice(0, -1);
+      ctx.fillText(sub, W / 2, M + 140);
+    }
     ctx.drawImage(img, M, M + TITLE_H, bw, bh);
     URL.revokeObjectURL(url);
     const blob = await new Promise<Blob | null>((res: (b: Blob | null) => void) => cv.toBlob(res, "image/png"));
@@ -987,7 +917,7 @@ export default function App() {
     if (!q) return d < 0 ? "This is the lowest copy, at the nut" : "This is the highest copy";
     return `${shapeLabel(q)} \u00b7 frets ${q.lo}\u2013${q.hi}`;
   };
-  const STEP_TITLE = [`${I}7 is four notes`, "Rootless Chords", "Add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop Voicings: Drop 2 and Drop 3", "Explore the whole neck"];
+  const STEP_TITLE = [`${cs(I, "dom7")} is four notes`, "Rootless Chords", "Add the 9", "Chord Synonyms: same notes, three names", "The dominant pentatonic", `${I} Mixolydian: the 4 and 6`, "Drop Voicings: Drop 2 and Drop 3", "Explore the whole neck"];
   const tipText = (id: string): string => {
     if (id.startsWith("step")) { const i = Number(id.slice(4)); return `${i + 1} \u00b7 ${STEP_TITLE[i]}`; }
     if (id.startsWith("shape")) { const p = Number(id.slice(5)); return `Shape ${p + 1} \u00b7 ${CAGED[0][p]} shape from ${I}, ${CAGED[4][p]} from ${III}, ${CAGED[7][p]} from ${V}${cur.p === p && canOctave ? " \u00b7 tap again for the next octave" : ""}`; }
@@ -1123,7 +1053,7 @@ export default function App() {
               {scaleLayer
                 ? tabsBtn("Label the dots", [{ value: "notes", label: "Note Names" }, { value: "0", label: "Intervals" }], show === "notes" ? "notes" : "0", (v: string) => { setShow(v === "notes" ? "notes" : "intervals"); setFrame("0"); }, [1, 1], undefined, false, 12.5, 42)
                 : (<div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, backgroundColor: PAGE }}>
-                  <div id="nine-from" style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }}>{tabsBtn("Count from", [{ value: "0", label: `${I}9` }, { value: "4", label: `${III}\u00f8` }, { value: "7", label: `${V}m6` }], frame, (v: string) => setFrame(v), [1, 1, 1], undefined, false, 12.5, 42)}</div>
+                  <div id="nine-from" style={{ flex: 1, minWidth: 0, backgroundColor: PAGE }}>{tabsBtn("Count from", [{ value: "0", label: `${cs(I, "dom9")}` }, { value: "4", label: `${cs(III, "hdim")}` }, { value: "7", label: `${cs(V, "m6")}` }], frame, (v: string) => setFrame(v), [1, 1, 1], undefined, false, 12.5, 42)}</div>
                   <div role="radiogroup" id="nine-show-explore" aria-label="Label the dots" style={{ flex: "0 0 auto", display: "inline-flex", flexDirection: "column", border: `1px solid ${LINE_UI}`, borderRadius: 9, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
                     {[["notes", "Names"], ["intervals", "Intervals"]].map(([v, lb]: string[]) => (
                       <button key={v} type="button" role="radio" aria-checked={show === v} onClick={() => setShow(v)} style={{ height: 21, padding: "0 10px", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "21px", color: show === v ? PAGE : INK, backgroundColor: show === v ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease" }}>{lb}</button>

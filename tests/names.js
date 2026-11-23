@@ -10,7 +10,7 @@ const layer=async l=>{await pg.evaluate(l=>[...document.querySelectorAll('.nine-
 const label=async l=>{await pg.evaluate(l=>[...document.querySelectorAll('#nine-labels button')].find(b=>b.textContent===l).click(),l);await S(300);};
 const shot=async n=>{const r=await pg.evaluate(()=>{const e=document.getElementById('nine-name').getBoundingClientRect();return {x:0,y:e.top-4,width:390,height:e.height+8};});await pg.screenshot({path:n,clip:r});};
 await layer('Arpeggio');await shot('name_c.png');
-await label('Gm6');await layer('Drop 2');await shot('name_gm6.png');
+await label(require('./notation').chordSymbol('G','m6'));await layer('Drop 2');await shot('name_gm6.png');
 await setKey('Bb');await label('C9'.replace('C','B♭')==='x'?'':'B♭9'.slice(0,0)+(await pg.evaluate(()=>document.querySelector('#nine-labels button:nth-child(2)').textContent)));await shot('name_bb.png');
 await pg.evaluate(()=>document.getElementById('nine-share-quick').click());await S(1500);
 const r=await pg.evaluate(async()=>{const d=window.__shared;if(!d)return null;const f=d.files[0];const buf=new Uint8Array(await f.arrayBuffer());let s='';for(const x of buf)s+=String.fromCharCode(x);return {n:f.name,b64:btoa(s),t:d.title};});

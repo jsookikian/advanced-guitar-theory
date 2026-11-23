@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "grok/canvas";
 import type { CSSProperties } from "grok/canvas";
-import { pipify } from "../../shared/pip";
+import { pipify } from "./pip";
 
 // A coach-mark tour of the lesson's controls: one spotlight on one control at a time, with a short note and Back / Next.
 // Each step names a CSS selector for what to light and, when the control only exists on another card, where to go first (`at`).

@@ -1,6 +1,6 @@
-const p=require('puppeteer-core');(async()=>{const site=await require('./site').start();const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
+const p=require('puppeteer-core');const N=require('./notation');const NM={c9:N.chordSymbol('C','dom9'),eo:N.chordSymbol('E','hdim'),g6:N.chordSymbol('G','m6')};(async()=>{const site=await require('./site').start();const b=await p.launch({executablePath:process.env.CHROME||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:'new'});const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
 await pg.setViewport({width:390,height:844});await pg.goto(site.url('lessons/dominant-pentatonics/index.html'));await new Promise(r=>setTimeout(r,1000));
-const res=await pg.evaluate(async()=>{
+const res=await pg.evaluate(async(NM)=>{
  const S=t=>new Promise(r=>setTimeout(r,t));const OP=[4,9,2,7,11,4];
  const LET=['C','D','E','F','G','A','B'],NAT=[0,2,4,5,7,9,11],ST={0:0,2:1,4:2,5:3,7:4,9:5,10:6};
  const NOTE={0:'C',2:'D',4:'E',5:'F',7:'G',9:'A',10:'B♭'};
@@ -9,7 +9,7 @@ const res=await pg.evaluate(async()=>{
  const click=(sel,t)=>{const x=btns(sel).find(b=>b.textContent.trim()===t);if(!x)throw new Error('no '+t+' in '+sel);x.click();};
  const goCard=async c=>{btns('nav[aria-label="Lesson steps"] button')[c].click();await S(60);const cur=btns('nav button').findIndex(x=>x.getAttribute('aria-current')==='step');if(cur!==c)throw new Error('nav '+c+' got '+cur);};
  let cases=0,fails=[],dots=0,legChecks=0,nameChecks=0;
- const FR=[['C9',0],['Eø',4],['Gm6',7]];
+ const FR=[[NM.c9,0],[NM.eo,4],[NM.g6,7]];
  for(let c=0;c<8;c++){
   await goCard(c);
   if(c<=6){ // guided steps: walk every beat, check each lit and dimmed dot's label, the red root, and the bold chord name
@@ -43,7 +43,7 @@ const res=await pg.evaluate(async()=>{
    for(const shp of (c<=3?[null]:['1','2','3','4','5'])){ if(shp){btns('[aria-label="Shape"] [role=radio]')[+shp-1].click(); await S(30);}
    for(const mode of ['Intervals','Notes']){
     const SC=(tg==='Pentatonic'||tg==='Mixolydian');
-    for(const [fl,fr] of (SC?[[mode==='Notes'?'Note Names':'Intervals',0]]:(mode==='Notes'?[['C9',0]]:FR))){
+    for(const [fl,fr] of (SC?[[mode==='Notes'?'Note Names':'Intervals',0]]:(mode==='Notes'?[[NM.c9,0]]:FR))){
      if(SC) click('#nine-labels button',fl); else { click('#nine-show-explore button',mode==='Notes'?'Names':'Intervals'); click('#nine-from button',fl); }
      await S(40);
      const quiz=false;
@@ -58,7 +58,7 @@ const res=await pg.evaluate(async()=>{
       if(FOC){const dim=parseFloat(g.querySelector('circle').style.opacity||'1')<0.5; if(dim===FOC.includes(d)) fails.push(`dimming card${c+1} ${mode} ${fl}: s${s}f${f} dim=${dim}`);}
       if(lab!==exp || red!==(d===r)) fails.push(`card${c+1} ${em} ${tg} sh${shp} ${mode} ${fl}: s${s}f${f} got '${lab}' red=${red} want '${exp}'`);
      }
-     const BASE={0:'C9',4:'Eø',7:'Gm6'}[r];
+     const BASE={0:NM.c9,4:NM.eo,7:NM.g6}[r];
      const leg=document.getElementById('nine-name').textContent;
      const rootShown=[...document.querySelectorAll('#nine-board g[data-vis="1"]')].some(g=>(OP[+g.dataset.s]+ +g.dataset.f)%12===r);
      legChecks++;
@@ -68,6 +68,6 @@ const res=await pg.evaluate(async()=>{
      if(gl!==fl) fails.push(`global frame card${c+1} shows ${gl} want ${fl}`);
     }}}}
  }
- return {cases,dots,legChecks,nameChecks,failCount:fails.length,fails:fails.slice(0,10)};});
+ return {cases,dots,legChecks,nameChecks,failCount:fails.length,fails:fails.slice(0,10)};},NM);
 console.log(JSON.stringify(res,null,1));
 await b.close();site.close();})();
