@@ -1025,8 +1025,8 @@ export default function App() {
         {/* Every beat of a guided step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
         <div className={C.kind === "explore" ? "nine-card nine-tall" : "nine-card"} style={{ position: "relative", overflow: "hidden", display: guided ? "grid" : "flex", gridTemplateColumns: "minmax(0, 1fr)", flexDirection: "column", justifyContent: guided ? "stretch" : "flex-end", backgroundColor: PAGE }}>
           {!guided ? <div style={{ position: "absolute", top: 0, right: 0, display: "flex", alignItems: "center", gap: 4, zIndex: 1, backgroundColor: PAGE }}>{playToggle}{settingsToggle}</div> : null}
-          <div key={`card${card}-${beat}`} style={{ ...(guided ? { gridArea: "1 / 1", alignSelf: "end" } : {}), display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
-          {content ? content.beats.map((b: { text: ReactNode; name: string }, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "end", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(content.head)}{line(b.text)}</div>) : null}
+          <div key={`card${card}-${beat}`} style={{ ...(guided ? { gridArea: "1 / 1", alignSelf: "start" } : {}), display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
+          {content ? content.beats.map((b: { text: ReactNode; name: string }, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(content.head)}{line(b.text)}</div>) : null}
         </div>
 
         <div className="nine-q" style={{ minHeight: guided ? 34 : 42, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>

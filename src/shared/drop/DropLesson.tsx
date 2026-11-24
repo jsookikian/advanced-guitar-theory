@@ -473,10 +473,10 @@ function App() {
         </StickyHeader>
         {/* Every beat of the step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
         <div className="drop-card" style={{ position: "relative", overflow: "hidden", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", backgroundColor: PAGE }}>
-          <div key={`card${card}-${beat}`} style={{ gridArea: "1 / 1", alignSelf: "end", display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
+          <div key={`card${card}-${beat}`} style={{ gridArea: "1 / 1", alignSelf: "start", display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
             {beatDots}{head(cb.head ?? sc.head)}{line(cb.text)}
           </div>
-          {sc.beats.map((b, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "end", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(b.head ?? sc.head)}{line(b.text)}</div>)}
+          {sc.beats.map((b, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(b.head ?? sc.head)}{line(b.text)}</div>)}
         </div>
 
         {/* Explore has three control rows; the guided steps have two (Hear it, then the settings row), plus a first row on the ii V i step for the Minor / Major switch. */}
