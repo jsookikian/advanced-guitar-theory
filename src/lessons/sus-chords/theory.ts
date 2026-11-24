@@ -101,11 +101,11 @@ export const noteOf = (k: RootDef, rel: number, tone: number): string => toneNot
 export const ivOf = (tone: number): string => toneIv(SUS7, tone);
 
 /**
- * The lowest voicing of a chord in one inversion on a string set that also fits on the neck, fretted, as its dominant 7 (the 3rd one fret lower than
- * the 4th of the 7sus4): the "make" steps show the dominant 7 and then the 7sus4 on the same strings.
+ * The lowest voicing of a chord in one inversion on a string set that also fits on the neck, fretted, as the chord it is made from (the dominant 7 by default, whose 3rd is one fret below
+ * the 4th of the 7sus4; the minor 7 two frets): the "make" steps show the dominant 7 and then the 7sus4 on the same strings.
  */
-export const makeInst = (k: RootDef, rel: number, set: number, inv: number): Inst | undefined =>
-  dropInsts(k, rel, set).find((x: Inst) => x.inv === inv && Math.min(...frets(x, Q("dom7"))) >= 1);
+export const makeInst = (k: RootDef, rel: number, set: number, inv: number, base: Quality = Q("dom7")): Inst | undefined =>
+  dropInsts(k, rel, set).find((x: Inst) => x.inv === inv && Math.min(...frets(x, base)) >= 1);
 
 /** The fret the board starts at (one fret of room below the lowest, seven frets in all) for a set of frets. */
 export function windowFor(fr: number[]): number {

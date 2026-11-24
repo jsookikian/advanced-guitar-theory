@@ -5,7 +5,7 @@ const p = require('puppeteer-core'); const tok = require('../src/shared/tokens.j
   const site = await require('./site').start(); const b = await p.launch({ executablePath: process.env.CHROME, args: ['--no-sandbox'], headless: 'new' });
   const S = t => new Promise(r => setTimeout(r, t)); const pg = await b.newPage(); const fails = []; const F = m => { fails.push(m); if (fails.length < 40) console.log('FAIL', m); };
   pg.on('pageerror', e => F('pageerror ' + e.message)); pg.on('console', m => { if (m.type() === 'error') F('console ' + m.text()); });
-  const URL = site.url('lessons/sus-chords/index.html'); const FIXED = [8, 4, 3, 0, 6, 1];
+  const URL = site.url('lessons/sus-chords/index.html'); const FIXED = [8, 4, 3, 0, 6, 5, 1];
   const at = async (c, k) => { await pg.evaluate(h => { location.hash = h; }, `#s${c + 1}${k ? 'b' + (k + 1) : ''}`); await S(450); };
   const dots = () => pg.evaluate(() => [...document.querySelectorAll('#drop-board g[data-vis="1"]')].map(g => [+g.dataset.s, +g.dataset.f, g.querySelector('text').textContent]));
   const beatsIn = () => pg.evaluate(() => { const e = document.querySelector('[aria-label^="Part"]'); return e ? +e.getAttribute('aria-label').split(' of ')[1] : 1; });
@@ -21,7 +21,7 @@ const p = require('puppeteer-core'); const tok = require('../src/shared/tokens.j
   for (const W of [390, 360, 320]) {
     await pg.setViewport({ width: W, height: 844 }); await pg.goto(URL); await S(900);
     const heights = new Set(), tops = new Set(); let total = 0;
-    for (let c = 0; c < 6; c++) { await at(c, 0); const n = FIXED[c] || await beatsIn(); for (let k = 0; k < n; k++) {
+    for (let c = 0; c < 7; c++) { await at(c, 0); const n = FIXED[c] || await beatsIn(); for (let k = 0; k < n; k++) {
       await at(c, k); total++; if (W === 390) (await scan(`card ${c + 1} beat ${k + 1}`)).forEach(F);
       heights.add(await pg.evaluate(() => Math.round(document.getElementById('drop-root').getBoundingClientRect().height)));
       tops.add(await pg.evaluate(() => Math.round(document.getElementById('drop-board').getBoundingClientRect().top)));
@@ -42,6 +42,13 @@ const p = require('puppeteer-core'); const tok = require('../src/shared/tokens.j
   d = await seq(4, [0, 1, 2, 3, 4, 5]);
   for (const [a, k2] of [[0, 1], [2, 3], [3, 4]]) if (moves(d[a], d[k2]) !== 1) F(`Vamp beat ${a + 1} to ${k2 + 1}: moves ${moves(d[a], d[k2])} dots, want 1`);
   await at(4, 4); if ((await pg.$$('.drop-halo')).length < 1) F('Vamp: the G on D7sus4 over D7 has no ring');
+  // Roots: B and E, each minor 7 then its 7sus4 with the b3 two frets up to the 4
+  d = await seq(5, [0, 1, 2, 3, 4]);
+  for (const i of [0, 2]) {
+    if (moves(d[i], d[i + 1]) !== 1) F(`Roots beat ${i + 1} to ${i + 2}: moves ${moves(d[i], d[i + 1])} dots, want 1`);
+    const mv = d[i].findIndex((x, j) => x[1] !== d[i + 1][j][1]); if (mv < 0 || d[i + 1][mv][1] - d[i][mv][1] !== 2) F(`Roots beat ${i + 2}: the moved dot should go up two frets`);
+  }
+  if (moves(d[3], d[4]) !== 0) F('Roots: the summary beat should not move a dot');
 
   // Walk: every position on every string set, two beats each, two dots move
   for (let si = 0; si < 3; si++) { await at(3, 0); await pg.evaluate(i => document.querySelectorAll('#drop-walkset button')[i].click(), si); await S(400);
@@ -52,16 +59,28 @@ const p = require('puppeteer-core'); const tok = require('../src/shared/tokens.j
   for (const k of KEYS) {
     await at(0, 0); await pg.evaluate(() => document.querySelector('button[aria-label="Display settings"]').click()); await S(250);
     await pg.select('#drop-key', k.id); await S(300); await pg.evaluate(() => document.querySelector('button[aria-label="Display settings"]').click()); await S(250);
-    for (const [c, kk] of [[0, 0], [0, 1], [0, 7], [1, 2], [1, 3], [2, 1], [3, 1], [4, 3], [5, 0]]) { await at(c, kk); const dd = await dots(); if (dd.length !== 4) F(`${k.id} card ${c + 1}.${kk + 1} dots ${dd.length}`);
+    for (const [c, kk] of [[0, 0], [0, 1], [0, 7], [1, 2], [1, 3], [2, 1], [3, 1], [4, 3], [5, 1], [5, 3], [6, 0]]) { await at(c, kk); const dd = await dots(); if (dd.length !== 4) F(`${k.id} card ${c + 1}.${kk + 1} dots ${dd.length}`);
       if (dd.some(x => x[1] < 0 || x[1] > 24)) F(`${k.id} card ${c + 1}.${kk + 1} fret out of range`); (await scan(`${k.id} card ${c + 1}.${kk + 1}`)).forEach(F); }
   }
 
   // Explore: every string set and pair
-  await pg.goto(URL); await S(700); await at(5, 0);
+  await pg.goto(URL); await S(700); await at(6, 0);
+  if (!(await pg.$('#drop-hear'))) F('Explore has no Hear it button');
   for (let si = 0; si < 3; si++) for (let pr = 0; pr < 3; pr++) {
     await pg.evaluate(i => document.querySelectorAll('#drop-sets button')[i].click(), si); await pg.evaluate(i => document.querySelectorAll('#drop-pair button')[i].click(), pr); await S(250);
     const dd = await dots(); if (dd.length !== 4) F(`Explore set ${si} pair ${pr}: ${dd.length} dots`);
     await pg.evaluate(() => document.querySelectorAll('#drop-chord button')[1].click()); await S(250); const d2 = await dots(); if (moves(dd, d2) !== 2) F(`Explore set ${si} pair ${pr}: switching chord moves ${moves(dd, d2)} dots, want 2`);
   }
+  // Switching string sets keeps the voicing (same chord name, so the same inversion), on Explore at every position of the top set, and on Walk
+  const nm = () => pg.$eval('#drop-name-title', e => e.textContent);
+  await pg.goto(URL); await S(700); await at(6, 0);
+  await pg.evaluate(() => document.querySelectorAll('#drop-sets button')[2].click()); await S(250);
+  for (let step = 0; step < 4; step++) {
+    const before = await nm();
+    for (const si of [1, 0, 1, 2]) { await pg.evaluate(i => document.querySelectorAll('#drop-sets button')[i].click(), si); await S(250); const a = await nm(); if (a !== before) F(`Explore: moving to set ${si} changed ${before} to ${a}`); }
+    await pg.evaluate(() => document.querySelector('button[aria-label^="Next position"]').click()); await S(250);
+  }
+  await at(3, 0); await pg.evaluate(() => document.querySelectorAll('#drop-walkset button')[2].click()); await S(300);
+  for (const k of [2, 4]) { await at(3, k); const before = await nm(); for (const si of [1, 0, 2]) { await pg.evaluate(i => document.querySelectorAll('#drop-walkset button')[i].click(), si); await S(300); const a = await nm(); if (a !== before) F(`Walk: moving to set ${si} changed ${before} to ${a}`); } }
   console.log(fails.length ? fails.length + ' FAILED' : 'sus ok'); await b.close(); site.close(); process.exit(fails.length ? 1 : 0);
 })();

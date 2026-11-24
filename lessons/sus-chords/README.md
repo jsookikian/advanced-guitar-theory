@@ -24,7 +24,8 @@ The lesson started from Jordan's video "How to use Sus chords in your everyday p
 | 3 | Pair | 3 | D7sus4/G and A7sus4/G: two dots move a whole step, G and A stay |
 | 4 | Walk | 2 per position | Every position of the pair on a chosen string set, D7sus4 then A7sus4; "Play the position" strums both |
 | 5 | Vamp | 6 | Am7 to A7sus4, D7 to D7sus4, the G falling to F♯, and the A7sus4 re-read from the key root (Am7 with an added 11 and no 5th) |
-| 6 | Explore | 1 | String set tabs, chord pair tabs (D7sus4 / A7sus4 and two more fifths in A Dorian), a chord tab, arrows up and down the neck, Names / Intervals |
+| 6 | Roots | 5 | B-7 to B7sus4 and E-7 to E7sus4 (the ♭3 steps up to the 4), then the rule: in this mode a 7sus4 fits on A, B, D and E and stands in for A-7, B-7, D7 and E-7; C, F♯ and G would need a note outside the scale |
+| 7 | Explore | 1 | String set tabs, chord pair tabs (D7sus4 / A7sus4 and two more fifths in A Dorian), a chord tab, arrows up and down the neck, Names / Intervals. Switching string set keeps the inversion and lands on the nearest position |
 
 Settings: Key (all 12), Left-handed, Sound, Drone (the key's root, the natural pedal for the Vamp), Show tutorial, Share image.
 

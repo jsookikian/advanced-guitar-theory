@@ -42,18 +42,19 @@ const selectStyle: CSSProperties = { height: CH, width: "100%", boxSizing: "bord
 // vamp turns the 4th back into a 3rd.
 type Who = "a" | "b";
 type QK = "sus" | "m7" | "dom7";
-interface Beat { sc: "lead" | "make" | "walk" | "vamp" | "explore"; who: Who; q?: QK; pv?: { who: Who; q?: QK }; set?: number; rel?: number; inv?: number; pos?: number; over?: 0 | 5; fall?: boolean; reread?: boolean }
+interface Beat { sc: "lead" | "make" | "walk" | "vamp" | "explore"; who: Who; q?: QK; base?: QK; pv?: { who: Who; q?: QK }; set?: number; rel?: number; inv?: number; pos?: number; over?: 0 | 5; fall?: boolean; reread?: boolean }
 
-const STEP_LABEL = ["Make it", "Strings", "Pair", "Walk", "Vamp", "Explore"];
-const STEP_TITLE = ["Raise the 3rd of a Drop 2 dominant 7 to the 4th", "The same move on the middle and low strings", "Two chords, two notes move", "Walk the pair up the neck", "Play it over Am7 to D7", "Explore every string set and pair"];
+const STEP_LABEL = ["Make it", "Strings", "Pair", "Walk", "Vamp", "Roots", "Explore"];
+const STEP_TITLE = ["Raise the 3rd of a Drop 2 dominant 7 to the 4th", "The same move on the middle and low strings", "Two chords, two notes move", "Walk the pair up the neck", "Play it over Am7 to D7", "Which roots work in this mode", "Explore every string set and pair"];
 // The four inversions in the order they climb the neck on the top strings (1st, 2nd, 3rd, then root position an octave up).
 const MAKE_ORDER = [1, 2, 3, 0];
-const MAKE = 0; const STRINGS = 1; const PAIR_STEP = 2; const WALK = 3; const VAMP = 4; const EXPLORE = 5;
+const MAKE = 0; const STRINGS = 1; const PAIR_STEP = 2; const WALK = 3; const VAMP = 4; const ROOTS = 5; const EXPLORE = 6;
 const TOTAL = STEP_LABEL.length;
 
 function buildBeats(walkN: number): Beat[][] {
   const lead = (who: Who, pv?: Who): Beat => ({ sc: "lead", who, pv: pv ? { who: pv } : undefined });
   const make = (set: number, inv: number, q: QK): Beat => ({ sc: "make", who: "a", rel: 5, set, inv, q, pv: q === "sus" ? { who: "a", q: "dom7" } : undefined });
+  const root = (rel: number, q: QK): Beat => ({ sc: "make", who: "a", rel, set: 2, inv: 1, q, base: "m7", pv: q === "sus" ? { who: "a", q: "m7" } : undefined });
   const vamp = (who: Who, q: QK, over: 0 | 5, pv?: QK, extra: Partial<Beat> = {}): Beat => ({ sc: "vamp", who, q, over, pv: pv ? { who, q: pv } : undefined, ...extra });
   return [
     MAKE_ORDER.flatMap((inv: number): Beat[] => [make(2, inv, "dom7"), make(2, inv, "sus")]),
@@ -61,6 +62,7 @@ function buildBeats(walkN: number): Beat[][] {
     [lead("a"), lead("b", "a"), lead("a", "b")],
     Array.from({ length: walkN * 2 }, (_: unknown, n: number): Beat => ({ sc: "walk", who: n % 2 === 0 ? "a" : "b", pv: n % 2 === 1 ? { who: "a" } : undefined, pos: Math.floor(n / 2) })),
     [vamp("b", "m7", 0), vamp("b", "sus", 0, "m7"), vamp("a", "dom7", 5), vamp("a", "sus", 5, "dom7"), vamp("a", "dom7", 5, "sus", { fall: true }), vamp("a", "sus", 0, undefined, { reread: true })],
+    [root(2, "m7"), root(2, "sus"), root(7, "m7"), root(7, "sus"), root(7, "sus")],
     [{ sc: "explore", who: "a" }],
   ];
 }
@@ -71,7 +73,7 @@ const TUT_STEPS: TutStep[] = [
   { at: [0, 0], live: true, sel: ".drop-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board." },
   { at: [0, 0], live: true, sel: "#drop-hear", title: "Hear it", text: "Strums the chord that is on the board." },
   { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#drop-settings", title: "Settings", text: "Key, Left-handed, Sound, Drone, Show tutorial and Share image live here." },
-  { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "Six steps. Tap any one to jump straight to it." },
+  { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "Seven steps. Tap any one to jump straight to it." },
   { at: [0, 0], sel: "#drop-nav", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
   { at: [PAIR_STEP, 1], live: true, sel: "#drop-board", title: "Two dots move", text: "Only the changed dots move. The rings and the dashed ghosts show where they came from." },
   { at: [MAKE, 1], live: true, sel: "#drop-board", title: "One dot moves", text: "A Drop 2 dominant 7 becomes a 7sus4 when its 3rd steps up a fret to the 4th. The ring and the dashed ghost show where it came from." },
@@ -155,7 +157,7 @@ function App() {
   useEffect(() => { if (rootRef.current) lockPaint(rootRef.current); });
   // Each step opens on its own deliberate default; a choice made inside a step sticks until the learner leaves it.
   useEffect(() => { if (card === EXPLORE) { setExPos(0); setExChord(0); } }, [card]);
-  useEffect(() => { setExPos(0); }, [keyId, exSet, exPair]);
+  useEffect(() => { setExPos(0); }, [keyId, exPair]);
 
   // The drone is the key's root low down; it follows the Key setting and outlives phrases.
   const droneMidi = 36 + k.pc;
@@ -167,6 +169,13 @@ function App() {
   const lp: PairPos = leadPair(k);
   const exList: PairPos[] = pairPositions(k, exPair, exSet);
   const exPi = Math.min(exPos, exList.length - 1);
+  // Moving to another string set keeps the voicing: the same inversion of the first chord, nearest along the neck to where it was.
+  const nearestPos = (list: PairPos[], from: PairPos): number => {
+    let best = 0;
+    let bd = Infinity;
+    list.forEach((q: PairPos, i: number) => { const dd = (q.a.inv === from.a.inv ? 0 : 100) + Math.abs(q.lo - from.lo); if (dd < bd) { bd = dd; best = i; } });
+    return best;
+  };
   const QOF: Record<QK, Quality> = { sus: SUS7, m7: Q("m7"), dom7: Q("dom7") };
   const spec: Beat = onExplore ? { sc: "explore", who: exChord === 0 ? "a" : "b", pv: exChord === 1 ? { who: "a" } : undefined } : BEATS[card][bi];
   // The pair a beat draws from, and the chords' roots (semitones above the key) in it.
@@ -175,7 +184,7 @@ function App() {
   const pp: PairPos = spec.sc === "walk" ? walkList[spec.pos as number] : spec.sc === "explore" ? exList[exPi] : lp;
   const instOfWho = (w: Who, p: PairPos = pp): Inst => (w === "a" ? p.a : p.b);
   // Make beats pick their own voicing: the lowest one in the beat's inversion and string set that also fits on the neck as a dominant 7.
-  const makeI = spec.sc === "make" ? makeInst(k, spec.rel as number, spec.set as number, spec.inv as number) : undefined;
+  const makeI = spec.sc === "make" ? makeInst(k, spec.rel as number, spec.set as number, spec.inv as number, QOF[spec.base ?? "dom7"]) : undefined;
   const inst: Inst = makeI ?? instOfWho(spec.who);
   const rel = spec.sc === "make" ? (spec.rel as number) : relOfWho(spec.who);
   const root = chordRoot(k, rel);
@@ -200,7 +209,7 @@ function App() {
     const pitch = gripPitches(inst, q)[j];
     return { s: curS[j], f, fill: isRoot(tn[j], pitch) ? RED : INK, label: labelOf(tn[j], pitch), op: 1, halo: moved, ghost: moved && prevF ? { s: curS[j], f: prevF[j] } : undefined };
   });
-  const winFrets: number[] = spec.sc === "make" ? [...gripFrets(inst), ...gripFrets(inst, QOF.dom7)]
+  const winFrets: number[] = spec.sc === "make" ? [...gripFrets(inst), ...gripFrets(inst, QOF[spec.base ?? "dom7"])]
     : spec.sc === "vamp" ? [...gripFrets(lp.a), ...gripFrets(lp.b), ...gripFrets(lp.a, QOF.dom7), ...gripFrets(lp.b, QOF.m7)]
       : spec.sc === "lead" || spec.sc === "walk" || spec.sc === "explore" ? [...gripFrets(pp.a), ...gripFrets(pp.b)] : gripFrets(inst);
   const wl = windowFor(winFrets);
@@ -211,7 +220,7 @@ function App() {
     const r = relOfWho(w);
     return qq === "sus" ? susName(k, r, ii.inv) : chordName(chordRoot(k, r), QOF[qq], ii.inv);
   };
-  const name = spec.sc === "make" ? (q === QOF.dom7 ? chordName(root, QOF.dom7, inst.inv) : susName(k, rel, inst.inv))
+  const name = spec.sc === "make" ? (spec.q === "sus" ? susName(k, rel, inst.inv) : chordName(root, q, inst.inv))
     : spec.sc === "vamp" ? nameOf(spec.who, spec.q ?? "sus", lp)
       : nameOf(spec.who, "sus", pp);
 
@@ -304,6 +313,15 @@ function App() {
     const raised = toneNote(dRoot, SUS7, 1);
     return { text: <>Raise the {ip("3")}, {np(lowered)}, one fret to the {ip("4")}, {np(raised)}: <B>{susName(k, 5, inv)}</B>. Nothing else moves.</>, sub };
   };
+  // The Roots beats: the 7sus4 on the other roots that fit the mode (B and E), each made from the minor 7 it stands in for.
+  const rootsSay = (n: number): Say => {
+    if (n === 4) return { text: <>So a 7sus4 fits on {list([chordRoot(k, 0), chordRoot(k, 2), chordRoot(k, 5), chordRoot(k, 7)].map((r) => spellAt(r, 0, 0)))} in this mode: it stands in for {chordify(am7)}, {chordify(chordName(chordRoot(k, 2), QOF.m7, 0))}, {chordify(d7)} and {chordify(chordName(chordRoot(k, 7), QOF.m7, 0))}. On {list([spellAt(k, 2, 3), spellAt(k, 5, 9), spellAt(k, 6, 10)])} it would need a note outside the scale.</>, sub: "the roots that fit" };
+    const rel = n < 2 ? 2 : 7;
+    const ii = makeInst(k, rel, 2, 1, QOF.m7) as Inst;
+    const r = chordRoot(k, rel);
+    if (n % 2 === 0) return { text: <>{n === 0 ? "It works on other roots too. " : ""}The {n === 0 ? "ii" : "v"} chord of the mode is <B>{chordName(r, QOF.m7, 1)}</B>: {list(notesOf(ii, rel, QOF.m7))} from the bass up.</>, sub: n === 0 ? "the ii chord" : "the v chord" };
+    return { text: <>Swap the {np(toneNote(r, QOF.m7, 1))}, the {ip("♭3")}, for the {ip("4")}, {np(toneNote(r, SUS7, 1))}: <B>{susName(k, rel, 1)}</B>. Every note is in the scale.</>, sub: "minor 7 to 7sus4" };
+  };
   const walkSay = (n: number): Say => {
     const where = `Position ${wpos + 1} of ${walkList.length}`;
     if (n % 2 === 0) return { text: <>{where}. <B>{susName(k, relOfWho("a", 0), pp.a.inv)}</B> on {range}: {list(notesOf(pp.a, relOfWho("a", 0)))} from the bass up.</>, sub: `${where} · ${range}` };
@@ -326,6 +344,7 @@ function App() {
       { text: <>Then let the {np(toneNote(chordRoot(k, 5), SUS7, 1))} fall back to the {np(F3)}. The tension resolves into <B>{d7}</B>.</>, sub: "the 4th falls to the 3rd" },
       { text: <>One more way to hear it. Counted from {np(I)}, <B>{nA}</B> is {list(["R", "♭3", "4", "♭7"])}: {chordify(am7)} with an added 11 and no 5th.</>, sub: "over A" },
     ] },
+    { head: "Which roots.", beats: [0, 1, 2, 3, 4].map(rootsSay) },
     { head: "Explore.", beats: [{ text: <>Pick the strings and a pair of chords. Switch between the two, and the arrows walk it up the neck.</>, sub: "" }] },
   ];
   const sc = SCRIPT[card];
@@ -440,7 +459,7 @@ const css = ":root,html,body{color-scheme:only light!important;background:#fdfcf
         {/* Three control rows on every step, so the page never changes height: Explore's pickers sit where the guided steps keep their caption and Hear it. */}
         <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
           {onExplore
-            ? setTabs(exSet, (n: number) => { setExSet(n); setExPos(0); }, "drop-sets", true)
+            ? setTabs(exSet, (n: number) => { setExPos(nearestPos(pairPositions(k, exPair, n), exList[exPi])); setExSet(n); }, "drop-sets", true)
             : <div id="drop-caption" style={{ flex: 1, minWidth: 0, fontFamily: SANS, fontSize: 12, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{chordify(caption)}</div>}
         </div>
         <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
@@ -450,8 +469,9 @@ const css = ":root,html,body{color-scheme:only light!important;background:#fdfcf
         </div>
         <div style={{ height: 36, display: "flex", alignItems: "center", gap: 10, backgroundColor: PAGE }}>
           {onExplore
-            ? tabs("Chord", [pairName(exPair, 0), pairName(exPair, 1)].map((l: string, i: number) => ({ value: String(i), label: l })), String(exChord), (v: string) => setExChord(Number(v)), "drop-chord")
-            : card === WALK ? setTabs(walkSet, (n: number) => { setWalkSet(n); setBeat(bi % 2); }, "drop-walkset") : <div style={{ flex: 1 }} />}
+            ? <>{tabs("Chord", [pairName(exPair, 0), pairName(exPair, 1)].map((l: string, i: number) => ({ value: String(i), label: l })), String(exChord), (v: string) => setExChord(Number(v)), "drop-chord")}
+              <button type="button" className="drop-btn" id="drop-hear" aria-pressed={playing} aria-label={playing ? "Stop" : "Hear it"} onClick={playShown} style={{ ...btn(false, false), flex: "0 0 auto", width: 40, padding: 0 }}>{playing ? "\u25a0" : "\u25b6"}</button></>
+            : card === WALK ? setTabs(walkSet, (n: number) => { setBeat(nearestPos(pairPositions(k, 0, n), walkList[Math.min(spec.pos ?? 0, walkList.length - 1)]) * 2 + (bi % 2)); setWalkSet(n); }, "drop-walkset") : <div style={{ flex: 1 }} />}
           {onExplore ? pill : null}
           {settingsToggle}
         </div>

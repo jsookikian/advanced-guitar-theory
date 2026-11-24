@@ -209,7 +209,7 @@ export async function playPhrase(opts: { bass?: number; notes: number[]; style: 
 // `active`, so stopAll() for a phrase never silences it; only stopDrone() does.
 let drone: { g: GainNode; oscs: OscillatorNode[]; freqs: number[] } | null = null;
 const hz = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12);
-const DRONE_LEVEL = 0.32;
+const DRONE_LEVEL = 0.16;
 
 export function isDroneOn(): boolean { return drone !== null; }
 

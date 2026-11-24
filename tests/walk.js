@@ -71,7 +71,14 @@ for (const k of roots) {
     if (Math.min(...T.frets(m, dq)) < 1) F(`${k.id} ${NAMES[rel]} set ${set} inv ${inv}: the dom7 has an open string`);
     if (ps.slice().sort((x, y) => x - y).join() !== ps.join()) F(`${k.id} ${NAMES[rel]} set ${set} inv ${inv}: pitches are not bass to top`);
   }
-  if (k.id === 'A') eq([0, 1, 2, 3].map(inv => T.frets(T.makeInst(k, 5, 2, inv))), [[12, 14, 13, 15], [5, 5, 3, 5], [7, 7, 8, 8], [10, 12, 10, 10]], 'A: D7sus4 on the top strings, four inversions');
+  // The Roots steps: the minor 7 on A, B and E becomes its 7sus4 with one note (the b3) two frets up to the 4.
+  for (const rel of [0, 2, 7]) for (let set = 0; set < 3; set++) for (let inv = 0; inv < 4; inv++) {
+    const mq = require('./drop-q.js')('m7'), m = T.makeInst(k, rel, set, inv, mq); if (!m) { F(`${k.id} rel ${rel} set ${set} inv ${inv} has no m7 make voicing`); continue; }
+    const ps = T.pitches(m), pm = T.pitches(m, mq), ch = ps.map((x, j) => x - pm[j]).filter(x => x !== 0);
+    if (ch.length !== 1 || ch[0] !== 2) F(`${k.id} rel ${rel} set ${set} inv ${inv}: m7 to sus4 should move exactly one note up two frets, got ${ch}`);
+    if (Math.min(...T.frets(m, mq)) < 1) F(`${k.id} rel ${rel} set ${set} inv ${inv}: the m7 has an open string`);
+  }
+  if (k.id === 'A') eq([0, 1, 2, 3].map(inv => T.frets(T.makeInst(k, 5, 2, inv))),[[12, 14, 13, 15], [5, 5, 3, 5], [7, 7, 8, 8], [10, 12, 10, 10]], 'A: D7sus4 on the top strings, four inversions');
   if (k.id === 'A') eq([0, 1, 2, 3].map(inv => T.frets(T.makeInst(k, 5, 2, inv), require('./drop-q.js')('dom7'))), [[12, 14, 13, 14], [4, 5, 3, 5], [7, 7, 7, 8], [10, 11, 10, 10]], 'A: D7 on the top strings, four inversions');
 }
 console.log(`${nGrips} Drop 2 grips and ${nPos} pair positions checked over 12 keys x 4 chords x 3 string sets`);
