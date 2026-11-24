@@ -8,7 +8,7 @@ import type { TutStep } from "../Tutorial";
 import { Pip } from "../pip";
 import { KEYS, flat, chordify, chordChildren, titleNodes, chordSymbol, asciiName } from "../notation";
 import type { KeyDef, ChordKind } from "../notation";
-import { INK, INK2, PAGE, LINE, LINE_UI, TEAL, RED, SERIF, REALBOOK, SANS, EASE, Tabs, lockPaint, StickyHeader, STICKY_CSS } from "../ui";
+import { INK, INK2, PAGE, LINE, LINE_UI, TEAL, RED, SERIF, REALBOOK, SANS, EASE, Tabs, lockPaint, fitBoard, StickyHeader, STICKY_CSS } from "../ui";
 import { shareBoard } from "../share";
 import Board from "./Board";
 import type { Voice } from "./Board";
@@ -189,7 +189,7 @@ function App() {
     const t = window.setTimeout(() => setTut(true), 900);
     return () => window.clearTimeout(t);
   }, []);
-  useEffect(() => { if (rootRef.current) lockPaint(rootRef.current); });
+  useEffect(() => { if (rootRef.current) { lockPaint(rootRef.current); fitBoard(rootRef.current); } });
 
   // Each step opens on its own deliberate default, not on whatever an earlier step left behind: Learn in root position, Explore in root position
   // on its first bass string, the walk on the bass string with the lowest range. A choice made inside a step sticks until the learner leaves it.
@@ -301,12 +301,20 @@ function App() {
 
   const next = (): void => { if (beat < nBeats - 1) { setDir(1); setBeat(beat + 1); } else go(card === total - 1 ? 0 : card + 1); };
   const prev = (): void => { if (beat > 0) { setDir(-1); setBeat(beat - 1); return; } if (card > 0) go(card - 1, SPEC[card - 1].length - 1); };
-  const navRef = useRef<{ next: () => void; prev: () => void; step: (d: number) => void }>({ next: () => {}, prev: () => {}, step: () => {} });
-  navRef.current = { next, prev, step: (d: number) => stepPos(lefty ? -d : d) };
+  const navRef = useRef<{ next: () => void; prev: () => void; step: (d: number) => void; play: () => void }>({ next: () => {}, prev: () => {}, step: () => {}, play: () => {} });
+  navRef.current = { next, prev, step: (d: number) => stepPos(lefty ? -d : d), play: playShown };
   useEffect(() => {
+    let swallowSpace = false;
     const onKey = (e: globalThis.KeyboardEvent): void => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.getAttribute("role") === "radio" || t.getAttribute("role") === "checkbox")) return;
+      if (e.key === " ") {
+        if ((t && (t.tagName === "TEXTAREA" || t.isContentEditable)) || document.querySelector('[role="dialog"][aria-label="Tutorial"]')) return;
+        e.preventDefault();
+        swallowSpace = true;
+        if (!e.repeat) navRef.current.play();
+        return;
+      }
       const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
       if (!d) return;
       if (cardRef.current === EXPLORE) navRef.current.step(d);
@@ -314,7 +322,9 @@ function App() {
       else navRef.current.prev();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKeyUp = (e: globalThis.KeyboardEvent): void => { if (e.key === " " && swallowSpace) { swallowSpace = false; e.preventDefault(); } };
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp); };
   }, []);
 
   // The words. Every note and interval is a circle (Pip); chord names are bold and set like a lead sheet.
@@ -471,28 +481,26 @@ function App() {
           ))}
         </nav>
         </StickyHeader>
-        {/* Every beat of the step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
+        {/* Every beat of every guided step is laid out invisibly in the same cell, so the card is as tall as the longest text in the lesson and the heading and board never move between guided steps. */}
         <div className="drop-card" style={{ position: "relative", overflow: "hidden", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", backgroundColor: PAGE }}>
-          <div key={`card${card}-${beat}`} style={{ gridArea: "1 / 1", alignSelf: "start", display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
-            {beatDots}{head(cb.head ?? sc.head)}{line(cb.text)}
-          </div>
-          {sc.beats.map((b, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(b.head ?? sc.head)}{line(b.text)}</div>)}
-        </div>
-
-        {/* Explore has three control rows; the guided steps have two (Hear it, then the settings row), plus a first row on the ii V i step for the Minor / Major switch. */}
-        {onExplore || wk ? (
-        <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
-          {onExplore
-            ? tabs("Chord", QUALITIES.map((x: Quality) => ({ value: x.id, label: chordName(k, x) })), exQ, (v: string) => setExQ(v as QId), "drop-quality", 11.5)
-            : <><div style={{ flex: 1, minWidth: 0 }} />
-              {wk ? (
-                <div role="radiogroup" id="drop-mode" aria-label="Minor or major ii V" style={{ display: "inline-flex", flex: "0 0 auto", border: `1px solid ${LINE_UI}`, borderRadius: 11, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
+          {wk ? (
+            <div role="radiogroup" id="drop-mode" aria-label="Minor or major ii V" style={{ position: "absolute", top: 0, right: 0, zIndex: 1, display: "inline-flex", border: `1px solid ${LINE_UI}`, borderRadius: 11, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
                   {[["minor", "Minor"], ["major", "Major"]].map(([v, lb]: string[]) => (
                     <button key={v} type="button" role="radio" aria-checked={(v === "minor") === walkMinor} onClick={() => setWalkMinor(v === "minor")} style={{ height: 22, padding: "0 10px", border: 0, borderRadius: 0, boxShadow: "none", cursor: "pointer", fontFamily: SANS, fontSize: 11, fontWeight: 600, lineHeight: "22px", color: (v === "minor") === walkMinor ? PAGE : INK, backgroundColor: (v === "minor") === walkMinor ? INK : PAGE, transition: "background-color 200ms ease, color 200ms ease" }}>{lb}</button>
                   ))}
                 </div>
-              ) : null}</>}
+          ) : null}
+          <div key={`card${card}-${beat}`} style={{ gridArea: "1 / 1", alignSelf: "start", display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
+            {beatDots}{head(cb.head ?? sc.head)}{line(cb.text)}
+          </div>
+          {onExplore ? null : script.flatMap((st, ci: number) => st.head === "Explore." ? [] : st.beats.map((b, i: number) => <div key={`${ci}-${i}`} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(b.head ?? st.head)}{line(b.text)}</div>))}
         </div>
+
+        {/* Explore has three control rows; the guided steps have one (the settings row), and the ii V i step keeps its Minor / Major switch inside the text card. */}
+        {onExplore ? (
+          <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
+            {tabs("Chord", QUALITIES.map((x: Quality) => ({ value: x.id, label: chordName(k, x) })), exQ, (v: string) => setExQ(v as QId), "drop-quality", 11.5)}
+          </div>
         ) : null}
         {onExplore ? (
           <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>

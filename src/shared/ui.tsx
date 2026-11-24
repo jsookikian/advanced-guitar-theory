@@ -34,6 +34,25 @@ const PAINT = ["color", "background-color", "fill", "stroke", "border-color", "b
 
 // Re-assert every inline paint colour as !important, give unpainted HTML elements inherit/transparent,
 // and cancel an inverting filter on any host ancestor, so no host or theme rule can repaint the sheet.
+// On a short window the board shrinks (keeping its proportions) just enough that the whole step fits without scrolling; it never goes below a readable size,
+// and a wide scrolling neck (width over 100%) is left alone. Runs after every render and on resize.
+let fitRoot: HTMLElement | null = null;
+export function fitBoard(root: HTMLElement): void {
+  if (!fitRoot) window.addEventListener("resize", () => { if (fitRoot) fitBoard(fitRoot); });
+  fitRoot = root;
+  const svg = root.querySelector('svg[id$="-board"]') as SVGSVGElement | null;
+  if (!svg || (svg.style.width && svg.style.width !== "100%")) return;
+  svg.style.maxHeight = "";
+  const col = Array.from(root.children).find((el: Element) => el.tagName === "DIV") as HTMLElement | undefined;
+  if (!col) return;
+  const r = svg.getBoundingClientRect();
+  let bottom = r.bottom;
+  Array.from(col.children).forEach((el: Element) => { const e = el as HTMLElement; if (e.tagName !== "STYLE" && !e.classList.contains("agt-bottombar")) bottom = Math.max(bottom, e.getBoundingClientRect().bottom); });
+  const reserve = parseFloat(getComputedStyle(root).paddingBottom) || 0;
+  const room = window.innerHeight - (bottom - r.height + reserve);
+  if (room < r.height - 1) svg.style.maxHeight = `${Math.max(240, Math.floor(room))}px`;
+}
+
 export function lockPaint(root: HTMLElement): void {
   root.style.setProperty("background-color", PAGE, "important");
   root.style.setProperty("color", INK, "important");
@@ -67,8 +86,10 @@ export function lockPaint(root: HTMLElement): void {
 export function StickyHeader(props: { children: ReactNode }) {
   return <div data-sticky="1" className="agt-sticky" style={{ backgroundColor: PAGE }}>{props.children}</div>;
 }
-export const STICKY_CSS = ".agt-sticky{display:flex;flex-direction:column;gap:8px} @media (max-width:600px){.agt-sticky{position:sticky;top:0;z-index:40;margin:-12px -16px 0;padding:12px 16px 6px;background:#fdfcfb;border-bottom:1px solid #dcd5d4}}"
-  + " @media (max-width:600px){.agt-sticky h1{font-size:18px!important;line-height:22px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}"
-  + " body{padding-bottom:64px!important} .agt-bottombar{position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0!important;padding:8px 16px calc(8px + env(safe-area-inset-bottom));background:#fdfcfb!important;border-top:1px solid #dcd5d4}"
-  + " .agt-bottombar button{height:40px!important;font-size:14px!important}}"
+export const STICKY_CSS = ".agt-sticky{display:flex;flex-direction:column;gap:8px;position:sticky;top:0;z-index:40;isolation:isolate;margin:-12px -16px 0;padding:12px 16px 6px}"
+  + " .agt-sticky::before{content:'';position:absolute;top:0;bottom:0;left:50%;width:100vw;transform:translateX(-50%);background:#fdfcfb;border-bottom:1px solid #dcd5d4;z-index:-1}"
+  + " @media (max-width:600px){.agt-sticky h1{font-size:18px!important;line-height:22px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}}"
+  + " #drop-root,#nine-root{min-height:100vh!important;min-height:100dvh!important;padding-bottom:calc(64px + env(safe-area-inset-bottom))!important}"
+  + " .agt-bottombar{position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0!important;padding:8px max(16px, calc((100% - 640px) / 2)) calc(8px + env(safe-area-inset-bottom));background:#fdfcfb!important;border-top:1px solid #dcd5d4}"
+  + " .agt-bottombar button{height:40px!important;font-size:14px!important}"
   + " html,body{overflow-x:clip!important}";

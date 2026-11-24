@@ -8,7 +8,7 @@ import type { TutStep } from "../../shared/Tutorial";
 import { Pip } from "../../shared/pip";
 import { KEYS, flat, chordify, chordChildren, titleNodes, chordSymbol, asciiName } from "../../shared/notation";
 import type { KeyDef } from "../../shared/notation";
-import { INK, INK2, PAGE, LINE, LINE_UI, TEAL, RED, SERIF, REALBOOK, SANS, EASE, Tabs, lockPaint, StickyHeader, STICKY_CSS } from "../../shared/ui";
+import { INK, INK2, PAGE, LINE, LINE_UI, TEAL, RED, SERIF, REALBOOK, SANS, EASE, Tabs, lockPaint, fitBoard, StickyHeader, STICKY_CSS } from "../../shared/ui";
 import { shareBoard } from "../../shared/share";
 import Board from "../../shared/drop/Board";
 import type { Voice } from "../../shared/drop/Board";
@@ -154,7 +154,7 @@ function App() {
     const t = window.setTimeout(() => setTut(true), 900);
     return () => window.clearTimeout(t);
   }, []);
-  useEffect(() => { if (rootRef.current) lockPaint(rootRef.current); });
+  useEffect(() => { if (rootRef.current) { lockPaint(rootRef.current); fitBoard(rootRef.current); } });
   // Each step opens on its own deliberate default; a choice made inside a step sticks until the learner leaves it.
   useEffect(() => { if (card === EXPLORE) { setExPos(0); setExChord(0); } }, [card]);
   useEffect(() => { setExPos(0); }, [keyId, exPair]);
@@ -253,12 +253,20 @@ function App() {
   const canPos = (d: number): boolean => { const t = exPi + d; return t >= 0 && t < exList.length; };
   const next = (): void => { if (bi < nBeats - 1) { setDir(1); setBeat(bi + 1); } else go(card === TOTAL - 1 ? 0 : card + 1); };
   const prev = (): void => { if (bi > 0) { setDir(-1); setBeat(bi - 1); return; } if (card > 0) go(card - 1, buildBeats(walkList.length)[card - 1].length - 1); };
-  const navRef = useRef<{ next: () => void; prev: () => void; step: (d: number) => void }>({ next: () => {}, prev: () => {}, step: () => {} });
-  navRef.current = { next, prev, step: (d: number) => stepPos(lefty ? -d : d) };
+  const navRef = useRef<{ next: () => void; prev: () => void; step: (d: number) => void; play: () => void }>({ next: () => {}, prev: () => {}, step: () => {}, play: () => {} });
+  navRef.current = { next, prev, step: (d: number) => stepPos(lefty ? -d : d), play: playShown };
   useEffect(() => {
+    let swallowSpace = false;
     const onKey = (e: globalThis.KeyboardEvent): void => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.getAttribute("role") === "radio" || t.getAttribute("role") === "checkbox")) return;
+      if (e.key === " ") {
+        if ((t && (t.tagName === "TEXTAREA" || t.isContentEditable)) || document.querySelector('[role="dialog"][aria-label="Tutorial"]')) return;
+        e.preventDefault();
+        swallowSpace = true;
+        if (!e.repeat) navRef.current.play();
+        return;
+      }
       const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
       if (!d) return;
       if (cardRef.current === EXPLORE) navRef.current.step(d);
@@ -266,7 +274,9 @@ function App() {
       else navRef.current.prev();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKeyUp = (e: globalThis.KeyboardEvent): void => { if (e.key === " " && swallowSpace) { swallowSpace = false; e.preventDefault(); } };
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp); };
   }, []);
 
   // ---- The words ---------------------------------------------------------------------------------------------------------
@@ -436,12 +446,12 @@ const css = ":root,html,body{color-scheme:only light!important;background:#fdfcf
           ))}
         </nav>
         </StickyHeader>
-        {/* Every beat of the step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
+        {/* Every beat of every guided step is laid out invisibly in the same cell, so the card is as tall as the longest text in the lesson and the heading and board never move between guided steps. */}
         <div className="drop-card" style={{ position: "relative", overflow: "hidden", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", backgroundColor: PAGE }}>
           <div key={`card${card}-${bi}`} style={{ gridArea: "1 / 1", alignSelf: "start", display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
             {beatDots}{head(sc.head)}{line(cb.text)}
           </div>
-          {sc.beats.map((b, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(sc.head)}{line(b.text)}</div>)}
+          {onExplore ? null : SCRIPT.flatMap((st, ci: number) => st.head === "Explore." ? [] : st.beats.map((b, i: number) => <div key={`${ci}-${i}`} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(st.head)}{line(b.text)}</div>))}
         </div>
 
         {/* Explore has three control rows (string set, chord pair, chord); the guided steps have two (Hear it, then the settings row). */}

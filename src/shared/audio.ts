@@ -175,6 +175,9 @@ export async function pluck(midi: number, vel = 0.75, hold = 0): Promise<void> {
   start(c, b, c.currentTime + 0.01, vel, hold);
 }
 
+// How long a strummed chord rings before it is let go (then a 0.4 s release): about half of what the recorded notes would ring on their own.
+const STRUM_HOLD = 0.3;
+
 /**
  * A phrase: an optional bass note that rings underneath, then the notes either one after another (arpeggio) or strummed
  * together low to high. Every sample is decoded first, so the timing between notes is exact once it starts.
@@ -192,16 +195,16 @@ export async function playPhrase(opts: { bass?: number; notes: number[]; style: 
   if (mine !== epoch) return; // stopped (or replaced) while the samples were decoding
   const t0 = c.currentTime + 0.03;
   let t = 0;
-  if (bass !== undefined) { start(c, bufs.get(bass) as AudioBuffer, t0, 0.7, 0); t = 0.12; }
-  const dur = style === "strum" ? 0.038 : 0.26;
+  if (bass !== undefined) { start(c, bufs.get(bass) as AudioBuffer, t0, 0.7, STRUM_HOLD); t = 0.12; }
+  const dur = style === "strum" ? 0.038 : 0.13;
   sorted.forEach((m: number, i: number) => {
     const at = t + i * dur;
-    start(c, bufs.get(m) as AudioBuffer, t0 + at, style === "strum" ? 0.7 : 0.8, style === "strum" ? 0 : dur * 0.95);
+    start(c, bufs.get(m) as AudioBuffer, t0 + at, style === "strum" ? 0.7 : 0.8, style === "strum" ? STRUM_HOLD : dur * 0.95);
     if (onNote) timers.push(window.setTimeout(() => onNote(m), Math.max(0, (t0 - c.currentTime + at) * 1000)));
   });
   await new Promise<void>((res: () => void) => {
     resolvers.push(res);
-    timers.push(window.setTimeout(res, (t0 - c.currentTime + t + sorted.length * dur + 0.5) * 1000));
+    timers.push(window.setTimeout(res, (t0 - c.currentTime + t + sorted.length * dur + (style === "strum" ? 0.7 : 0.5)) * 1000));
   });
 }
 

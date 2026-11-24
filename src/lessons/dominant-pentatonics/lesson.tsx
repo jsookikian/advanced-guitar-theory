@@ -8,7 +8,7 @@ import type { TutStep } from "../../shared/Tutorial";
 import { KEYS, flat, titlePieces, chordify, chordChildren, titleNodes, chordSymbol, asciiName } from "../../shared/notation";
 import type { ChordKind } from "../../shared/notation";
 import type { KeyDef, TitlePiece } from "../../shared/notation";
-import { Tabs, lockPaint, StickyHeader, STICKY_CSS } from "../../shared/ui";
+import { Tabs, lockPaint, fitBoard, StickyHeader, STICKY_CSS } from "../../shared/ui";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -525,7 +525,7 @@ export default function App() {
   openRef.current = open;
   const frameRef = useRef<string>("0");
   frameRef.current = frame;
-  const navRef = useRef<{ next: () => void; prev: () => void; key: (d: number) => void }>({ next: () => {}, prev: () => {}, key: () => {} });
+  const navRef = useRef<{ next: () => void; prev: () => void; key: (d: number) => void; play: () => void }>({ next: () => {}, prev: () => {}, key: () => {}, play: () => {} });
   const startTutorial = (): void => { tutFrom.current = { card: cardRef.current, beat }; setOpen(false); setTut(true); };
   const endTutorial = (): void => {
     setTut(false);
@@ -543,17 +543,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let swallowSpace = false;
     const onKey = (e: globalThis.KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.getAttribute("role") === "radio" || t.getAttribute("role") === "checkbox")) return;
+      if (e.key === " ") {
+        if ((t && (t.tagName === "TEXTAREA" || t.isContentEditable)) || document.querySelector('[role="dialog"][aria-label="Tutorial"]')) return;
+        e.preventDefault();
+        swallowSpace = true;
+        if (!e.repeat) navRef.current.play();
+        return;
+      }
       if (e.key === "ArrowRight") navRef.current.key(1);
       if (e.key === "ArrowLeft") navRef.current.key(-1);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKeyUp = (e: globalThis.KeyboardEvent): void => { if (e.key === " " && swallowSpace) { swallowSpace = false; e.preventDefault(); } };
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp); };
   }, []);
   // Runs after every render: keeps the sheet's paint locked against host and theme styles.
-  useEffect(() => { if (rootRef.current) lockPaint(rootRef.current); });
+  useEffect(() => { if (rootRef.current) { lockPaint(rootRef.current); fitBoard(rootRef.current); } });
 
   const k: KeyDef = KEYS.find((x: KeyDef) => x.id === keyId) ?? KEYS[0];
   const seq: Pos[] = useMemo(() => instances(k), [keyId]);
@@ -735,7 +745,7 @@ export default function App() {
     if (card > 0) { const pk = CARDS[card - 1].kind; go(card - 1, GUIDED.has(pk) ? BEAT_SPEC[pk].length - 1 : 0); }
   };
   // Arrow keys walk the beats and steps; on Explore (the last step) they walk the shapes instead of restarting the lesson.
-  navRef.current = { next, prev, key: (d: number) => { if (onExplore) stepShape(lefty ? -d : d); else if (d > 0) next(); else prev(); } };
+  navRef.current = { next, prev, key: (d: number) => { if (onExplore) stepShape(lefty ? -d : d); else if (d > 0) next(); else prev(); }, play: playShown };
   // The script: for every guided step a heading, and per beat one sentence and the bold chord name shown under the board.
   const beatContent = (kind: string): { head: string; beats: { text: ReactNode; name: string }[] } => {
     const dr = (set: Set<string>, label: string): string => `${vname(set)} \u00b7 ${label}`;
@@ -1022,11 +1032,11 @@ export default function App() {
           ))}
         </nav>
         </StickyHeader>
-        {/* Every beat of a guided step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
+        {/* Every beat of every guided step is laid out invisibly in the same cell, so the card is as tall as the longest text in the lesson and the heading and board never move between guided steps. */}
         <div className={C.kind === "explore" ? "nine-card nine-tall" : "nine-card"} style={{ position: "relative", overflow: "hidden", display: guided ? "grid" : "flex", gridTemplateColumns: "minmax(0, 1fr)", flexDirection: "column", justifyContent: guided ? "stretch" : "flex-end", backgroundColor: PAGE }}>
           {!guided ? <div style={{ position: "absolute", top: 0, right: 0, display: "flex", alignItems: "center", gap: 4, zIndex: 1, backgroundColor: PAGE }}>{playToggle}{settingsToggle}</div> : null}
           <div key={`card${card}-${beat}`} style={{ ...(guided ? { gridArea: "1 / 1", alignSelf: "start" } : {}), display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
-          {content ? content.beats.map((b: { text: ReactNode; name: string }, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(content.head)}{line(b.text)}</div>) : null}
+          {guided ? CARDS.filter((cd: Card) => GUIDED.has(cd.kind)).flatMap((cd: Card) => { const ct = beatContent(cd.kind); return ct.beats.map((b: { text: ReactNode; name: string }, i: number) => <div key={`${cd.kind}-${i}`} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "start", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(ct.head)}{line(b.text)}</div>); }) : null}
         </div>
 
         <div className="nine-q" style={{ minHeight: guided ? 34 : 42, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
@@ -1109,7 +1119,7 @@ export default function App() {
           })}
         </div>
         ) : null}
-        <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: C.kind === "voicing" ? 63 : 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
+        <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: guided ? 63 : 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
           {/* Equal air above the name and between it and the first dot: the board has its own 9px of padding, so the block starts 9px down; a lone name sits 9px lower in the block so the board never moves. */}
           <div style={{ minWidth: 0, marginTop: nameSub ? 0 : 6, backgroundColor: PAGE }}>
             <div id="nine-name-title" style={{ fontFamily: REALBOOK, fontSize: nameTitle.length > 20 ? 25 : 32, fontWeight: 400, lineHeight: "34px", letterSpacing: 0, color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{titleNodes(nameTitle, 1)}</div>
