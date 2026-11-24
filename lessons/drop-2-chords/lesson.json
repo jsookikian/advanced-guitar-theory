@@ -19,7 +19,7 @@
   ],
   "card": {
     "title": "Drop 2 Chords",
-    "subtitle": "Close chord, then drop one note",
+    "subtitle": "Closed chord, then drop one note",
     "drop": "drop2",
     "set": 1,
     "inv": 2

@@ -15,7 +15,7 @@ const config: DropConfig = {
   openInv: 2,
   texts: ({ I, maj, cs, ip, seq, B, sameInv, toneIvs }) => ({
     opening: [
-      { text: <>Start with <B>{cs(I, "maj7")}</B> stacked close on the top four strings: {seq(toneIvs(maj, [0, 1, 2, 3]))}, all within one octave.</>, sub: "close position" },
+      { text: <>Start with <B>{cs(I, "maj7")}</B> stacked as a closed chord on the top four strings: {seq(toneIvs(maj, [0, 1, 2, 3]))}, all within one octave.</>, sub: "closed position" },
       { text: <>Drop the second note from the top, the {ip("5")}, down an octave. It lands on string 5 and becomes the bass.</>, sub: "the fifth drops" },
       { text: <>The {ip("7")} now has a silent string beside it. Step it across to string 2: same sound, new string.</>, sub: "one more step" },
       { text: <>Four notes on four neighbouring strings, {sameInv(2, maj)} from the bass up. That is a Drop 2 chord.</>, sub: "Drop 2 · 2nd inversion" },

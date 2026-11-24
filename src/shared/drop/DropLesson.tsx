@@ -93,7 +93,7 @@ const SPEC: Beat[][] = [
 ];
 const N = (name: string): number => ["Drop", ...(cfg.other ? ["Compare"] : []), "Strings", "Inversions", "Qualities", "Learn", "ii V i", "Explore"].indexOf(name);
 const STEP_LABEL = [`Drop ${dt.fromTop}`, ...(cfg.other ? ["Compare"] : []), "Strings", "Inversions", "Qualities", "Learn", "ii V i", "Explore"];
-const STEP_TITLE = ["Close chord, then drop", ...(cfg.other ? [`Drop ${dt.fromTop} against Drop ${cfg.other.fromTop}`] : []), `${dt.sets.length === 3 ? "Three" : "Two"} string sets`, "Four inversions", `Closed, then Drop ${dt.fromTop}, for four chord qualities`, "Learn and practise: one note at a time, from major 7 to 6", "ii V I with Drop chords", "Explore every chord, string set and inversion"];
+const STEP_TITLE = ["Closed chord, then drop", ...(cfg.other ? [`Drop ${dt.fromTop} against Drop ${cfg.other.fromTop}`] : []), `${dt.sets.length === 3 ? "Three" : "Two"} string sets`, "Four inversions", `Closed, then Drop ${dt.fromTop}, for four chord qualities`, "Learn and practise: one note at a time, from major 7 to 6", "ii V I with Drop chords", "Explore every chord, string set and inversion"];
 const EXPLORE = SPEC.length - 1;
 
 // First-time tour: each step lights one control (CSS selector) on the step it lives on (`at` = step, beat).
@@ -108,7 +108,7 @@ const TUT_STEPS: TutStep[] = [
   { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#drop-settings", title: "Settings", text: "Key, Left-handed, Sound, Show tutorial and Share image live here." },
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: `${WORDS[SPEC.length]} steps. Tap any one to jump straight to it.` },
   { at: [0, 0], sel: "#drop-nav", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
-  { at: [0, 1], live: true, sel: "#drop-board", title: "One dot moves", text: `On the first step the close chord drops its ${FROMTOP} note from the top, and only that dot moves. The faint ring shows where it came from.` },
+  { at: [0, 1], live: true, sel: "#drop-board", title: "One dot moves", text: `On the first step the closed chord drops its ${FROMTOP} note from the top, and only that dot moves. The faint ring shows where it came from.` },
   { at: [N("Learn"), 1], live: true, sel: "#drop-board", title: "One note changes", text: "From major 7 to 6, only the dot that changes moves or is renamed, one fret at a time. The others stay exactly where they are." },
   { at: [N("Learn"), 0], live: true, sel: "#drop-learninv", title: "Practise in every inversion", text: "Switch the inversion and run the same path again: Root, 1st, 2nd or 3rd." },
   { at: [N("ii V i"), 0], live: true, sel: "#drop-mode", title: "Minor or major", text: "The walk comes as a minor ii V i or a major one. Pick the bass string below the board, or leave it on the one that stays lowest on the neck." },
@@ -326,7 +326,7 @@ function App() {
   const trio = (qq: Quality, was: string, now: string): { text: ReactNode; sub: string }[] => {
     const nm = chordName(k, qq);
     return [
-      { text: <><B>{nm}</B> stacked close: the {ip(was)} becomes {ip(now)}. Same top four strings.</>, sub: "close position" },
+      { text: <><B>{nm}</B> stacked as a closed chord: the {ip(was)} becomes {ip(now)}. Same top four strings.</>, sub: "closed position" },
       { text: <>Drop the {FROMTOP} note from the top, the {ip(toneIv(qq, DROP_TONE))}, down an octave, onto string {6 - OPEN_SET}.</>, sub: "the dropped note" },
       { text: <>Step the {ip(toneIv(qq, STEP_TONE))} across to string {6 - dt.final(OPEN_SET)[dt.stepVoice]}. {dt.fromTop === 2 ? "Four neighbouring strings again." : "The three upper notes sit on neighbouring strings."}</>, sub: `Drop ${dt.fromTop}` },
     ];
@@ -350,7 +350,7 @@ function App() {
   }));
   const texts = cfg.texts({ k, I, dt, maj, cs, np, ip, seq, B, sameInv, toneIvs });
   const script: { head: string; beats: { text: ReactNode; sub: string; head?: string }[] }[] = [
-    { head: "Close, then drop.", beats: texts.opening },
+    { head: "Closed, then drop.", beats: texts.opening },
     ...(cfg.other ? [{ head: `Drop ${dt.fromTop} or Drop ${cfg.other.fromTop}?`, beats: texts.compare as Texted[] }] : []),
     { head: "String sets.", beats: texts.strings },
     { head: "Inversions.", beats: [
@@ -383,7 +383,7 @@ function App() {
   const cb = sc.beats[Math.min(beat, sc.beats.length - 1)];
   const nameTitle = name;
   const nameSub = onExplore ? `${INV_NAMES[exInv]} · ${BASS_LABELS[exSet]}` : cb.sub;
-  const caption = view === "closed" ? "Close position \u00b7 the top four strings" : view === "skip" ? `Drop ${dt.fromTop} \u00b7 ${BASS_LABELS[inst.set]}, one string silent` : `${INV_NAMES[inst.inv]} \u00b7 ${BASS_LABELS[inst.set]}`;
+  const caption = view === "closed" ? "Closed position \u00b7 the top four strings" : view === "skip" ? `Drop ${dt.fromTop} \u00b7 ${BASS_LABELS[inst.set]}, one string silent` : `${INV_NAMES[inst.inv]} \u00b7 ${BASS_LABELS[inst.set]}`;
 
   const sharePng = (): void => {
     const svg = document.getElementById("drop-board") as SVGSVGElement | null;

@@ -49,7 +49,7 @@ A practical guide for a future session asked to build a new lesson. It records w
 
 ## 4. Teaching approach that worked
 
-- Start from the picture people already know (the close chord), then do one thing to it (drop the second note from the top). Close, drop, step across: three beats, one dot each.
+- Start from the picture people already know (the closed chord), then do one thing to it (drop the second note from the top). Closed, drop, step across: three beats, one dot each.
 - Change one note at a time to move between chords (maj7 to 7 to m7 to half-diminished; dim7 to m6 to 6). The learner sees which note defines the chord.
 - Compute every voicing from theory in all 12 keys: `instances()` lists placements, `place()` shifts single notes by quality, `viewVoices()` gives the pictures. Pick the home placement by rule (lowest with no open string), never by hand.
 - Use external pages only as a topic checklist. Write all text yourself, draw your own diagrams, credit once as "Further reading".
