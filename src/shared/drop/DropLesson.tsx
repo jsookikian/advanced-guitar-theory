@@ -149,7 +149,7 @@ function App() {
   // The ii V i walk: minor or major, and (null = the set with the lowest range for the key) which bass string.
   // Learn: which inversion the one-note-at-a-time path is run in.
   const [learnInv, setLearnInv] = useState<number>(0);
-  const [walkMinor, setWalkMinor] = useState<boolean>(true);
+  const [walkMinor, setWalkMinor] = useState<boolean>(false);
   const [walkPick, setWalkPick] = useState<number | null>(null);
   const walkRun = useRef<{ on: boolean }>({ on: false });
   const tutFrom = useRef<{ card: number; beat: number }>({ card: 0, beat: 0 });
@@ -389,7 +389,6 @@ function App() {
   const cb = sc.beats[Math.min(beat, sc.beats.length - 1)];
   const nameTitle = name;
   const nameSub = onExplore ? `${INV_NAMES[exInv]} · ${BASS_LABELS[exSet]}` : cb.sub;
-  const caption = view === "closed" ? "Closed position \u00b7 the top four strings" : view === "skip" ? `Drop ${dt.fromTop} \u00b7 ${BASS_LABELS[inst.set]}, one string silent` : `${INV_NAMES[inst.inv]} \u00b7 ${BASS_LABELS[inst.set]}`;
 
   const sharePng = (): void => {
     const svg = document.getElementById("drop-board") as SVGSVGElement | null;
@@ -490,11 +489,11 @@ function App() {
           </div>
         </div>
 
-        {/* Three control rows on every step, so the page never changes height: Explore's pickers sit where the guided steps keep their caption, Hear it and the label pill. */}
+        {/* Three control rows on every step, so the page never changes height: Explore's pickers sit in the rows the guided steps leave for the Minor/Major switch, Hear it and the label pill. */}
         <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
           {onExplore
             ? tabs("Chord", QUALITIES.map((x: Quality) => ({ value: x.id, label: chordName(k, x) })), exQ, (v: string) => setExQ(v as QId), "drop-quality", 11.5)
-            : <><div id="drop-caption" style={{ flex: 1, minWidth: 0, fontFamily: SANS, fontSize: 12, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{caption}</div>
+            : <><div style={{ flex: 1, minWidth: 0 }} />
               {wk ? (
                 <div role="radiogroup" id="drop-mode" aria-label="Minor or major ii V" style={{ display: "inline-flex", flex: "0 0 auto", border: `1px solid ${LINE_UI}`, borderRadius: 11, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
                   {[["minor", "Minor"], ["major", "Major"]].map(([v, lb]: string[]) => (

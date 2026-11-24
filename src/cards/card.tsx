@@ -4,13 +4,26 @@ import type { Voice } from "../shared/drop/Board";
 import { DROP2, DROP3, instances, homeFor, viewVoices, windowFor, Q, chordName, toneIv, rootName } from "../shared/drop/theory";
 import type { DropType, VV } from "../shared/drop/theory";
 import { KEYS, titleNodes } from "../shared/notation";
+import { SUS7, leadPair, susName, windowFor as susWindow, frets as susFrets, strings as susStrings, tones as susTones } from "../lessons/sus-chords/theory";
 import { INK, INK2, PAGE, RED, SERIF, SANS, REALBOOK } from "../shared/ui";
 
 // The 1200x630 link-preview cards (Open Graph / Twitter). Drawn by the same Board and chord-name code as the lessons, and captured by
 // tests/make-share-cards.js; nothing here is a picture of its own.
-export interface CardSpec { kind: "catalog" | "lesson"; title: string; subtitle: string; chord: { drop?: "drop2" | "drop3"; set: number; inv: number; rootless?: boolean } }
+export interface CardSpec { kind: "catalog" | "lesson"; title: string; subtitle: string; chord: { drop?: "drop2" | "drop3"; set: number; inv: number; rootless?: boolean; sus?: boolean } }
+
+// The 7sus4 card: D7sus4 over its 4th (G) on the highest four strings, in the key of A, the first chord of the lesson's pair.
+function buildSus() {
+  const A = KEYS.find((x) => x.id === "A") ?? KEYS[0];
+  const p = leadPair(A);
+  const fr = susFrets(p.a);
+  const st = susStrings(p.a);
+  const tn = susTones(p.a);
+  const voices: Voice[] = fr.map((f: number, j: number): Voice => ({ s: st[j], f, fill: tn[j] === 0 ? RED : INK, label: toneIv(SUS7, tn[j]), op: 1, halo: false }));
+  return { name: susName(A, 5, p.a.inv), voices, wl: susWindow([...fr, ...susFrets(p.b)]), root: "A" };
+}
 
 function build(spec: CardSpec) {
+  if (spec.chord.sus) return buildSus();
   const k = KEYS[0];
   const dt: DropType = spec.chord.drop === "drop3" ? DROP3 : DROP2;
   const q = Q(spec.chord.rootless ? "dom7" : "maj7");

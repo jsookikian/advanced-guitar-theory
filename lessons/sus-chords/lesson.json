@@ -1,0 +1,26 @@
+{
+  "title": "Sus Chords in A Dorian",
+  "summary": "Raise the 3rd of a Drop 2 dominant 7 to the 4th to make D7sus4, all four inversions and three string sets, then use D7sus4 and A7sus4 together over Am7 to D7.",
+  "level": "Advanced",
+  "order": 3,
+  "helpful": [
+    {
+      "topic": "Drop 2 chords",
+      "why": "Every chord here is a Drop 2 voicing: a closed chord with its second note from the top dropped an octave.",
+      "lesson": "drop-2-chords"
+    },
+    {
+      "topic": "the Dorian mode",
+      "why": "The lesson stays inside one mode over a minor 7 to dominant 7 vamp."
+    },
+    {
+      "topic": "seventh chords (7, m7)",
+      "why": "A 7sus4 swaps the 3rd of a dominant 7 for the 4th."
+    }
+  ],
+  "card": {
+    "title": "Sus Chords in A Dorian",
+    "subtitle": "Drop 2 voicings of 7sus4",
+    "sus": true
+  }
+}

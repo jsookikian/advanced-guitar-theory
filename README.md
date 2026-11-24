@@ -6,6 +6,7 @@ Short, interactive fretboard lessons for players who already know their pentaton
 |---|---|
 | Dominant Pentatonics and Half Diminished Chords (the "9 approach") | `lessons/dominant-pentatonics/` |
 | Drop 2 Chords | `lessons/drop-2-chords/` |
+| Sus Chords in A Dorian | `lessons/sus-chords/` |
 
 Writing a new lesson? Read `LESSON-AUTHORING.md` first: shared pieces, design rules, theory pitfalls, tests and a checklist.
 

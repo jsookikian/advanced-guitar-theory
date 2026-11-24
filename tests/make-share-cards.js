@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
   const bundle = esbuild.buildSync({ entryPoints: [path.join(root, 'src/cards/card.tsx')], bundle: true, write: false, format: 'iife', minify: true, jsx: 'automatic', alias: { 'grok/canvas': path.join(root, 'src/shared/grok-canvas-shim.ts') }, define: { 'process.env.NODE_ENV': '"production"' } }).outputFiles[0].text;
   const specs = [{ file: 'share.png', spec: { kind: 'catalog', title: 'Advanced Guitar Theory', subtitle: 'Short, interactive fretboard lessons for players who already know their pentatonics.', chord: { drop: 'drop2', set: 1, inv: 2 } } }];
   for (const id of fs.readdirSync(path.join(root, 'lessons'))) { const f = path.join(root, 'lessons', id, 'lesson.json'); if (!fs.existsSync(f)) continue; const c = JSON.parse(fs.readFileSync(f, 'utf8')).card; if (!c) { console.log('no card in', id); continue; }
-    specs.push({ file: `lessons/${id}/share.png`, spec: { kind: 'lesson', title: c.title, subtitle: c.subtitle, chord: { drop: c.drop, set: c.set, inv: c.inv, rootless: c.rootless } } }); }
+    specs.push({ file: `lessons/${id}/share.png`, spec: { kind: 'lesson', title: c.title, subtitle: c.subtitle, chord: { drop: c.drop, set: c.set, inv: c.inv, rootless: c.rootless, sus: c.sus } } }); }
   const site = await require('./site').start();
   const b = await p.launch({ executablePath: process.env.CHROME, args: ['--no-sandbox'], headless: 'new' });
   const pg = await b.newPage(); pg.on('pageerror', e => console.log('ERR', e.message)); await pg.setViewport({ width: 1200, height: 630, deviceScaleFactor: 1 });

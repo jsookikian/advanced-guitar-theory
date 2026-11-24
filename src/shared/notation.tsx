@@ -24,7 +24,7 @@ export const flat = (id: string): string => id.replace(/(?<=[A-G])b/g, "♭").re
 // NOTATION is the single value the rest of the code reads; a future setting only has to change it (and persist it).
 export type NotationStyle = "symbols" | "letters";
 export const NOTATION: { style: NotationStyle } = { style: "symbols" };
-export type ChordKind = "maj7" | "dom7" | "m7" | "hdim" | "dim7" | "m6" | "six" | "dom9" | "min";
+export type ChordKind = "maj7" | "dom7" | "m7" | "hdim" | "dim7" | "m6" | "six" | "dom9" | "min" | "dom7sus4";
 const KIND: Record<ChordKind, { symbols: string; letters: string }> = {
   maj7: { symbols: "\uE18A7", letters: "maj7" },
   dom7: { symbols: "7", letters: "7" },
@@ -35,6 +35,7 @@ const KIND: Record<ChordKind, { symbols: string; letters: string }> = {
   six: { symbols: "6", letters: "6" },
   dom9: { symbols: "9", letters: "9" },
   min: { symbols: "-", letters: "m" },
+  dom7sus4: { symbols: "7sus4", letters: "7sus4" },
 };
 // "C\uE18A7", "G-6/E": the root (already spelled with \u266d \u266f), the kind's suffix, and "/bass" when there is a bass note other than the root.
 export function chordSymbol(root: string, kind: ChordKind, bass?: string, style: NotationStyle = NOTATION.style): string {
@@ -59,10 +60,11 @@ export function simpleBass(note: string): string {
 // \u25b37, \u00b07, \u00f8, 9, 7, maj7, dim7, m6) is raised and smaller, as are flats and sharps. `titlePieces` cuts a name into those parts; the screen
 // and the share image both draw from it. Words after the chord ("Rootless", "Dominant Pentatonic") and a slash bass note stay on the line.
 export interface TitlePiece { t: string; scale: number; rise: number; after?: number }
-const QUALITY = "maj\\d*|dim\\d*|m\\d*|\u00f8\\d*|\uE18F\\d*|[\uE18A\uE187]\\d+|-\\d*|\\d+";
+const QUALITY = "\\d+sus\\d*|maj\\d*|dim\\d*|m\\d*|\u00f8\\d*|\uE18F\\d*|[\uE18A\uE187]\\d+|-\\d*|\\d+";
+const PAIR = /( = | \u2194 )/;
 export function titlePieces(text: string): TitlePiece[] {
   // Two readings of the same notes, "C-6 = A\u00f87": each side is set as its own chord name.
-  if (text.includes(" = ")) return text.split(" = ").flatMap((seg: string, i: number) => (i ? [{ t: " = ", scale: 1, rise: 0 }, ...titlePieces(seg)] : titlePieces(seg)));
+  if (PAIR.test(text)) return text.split(PAIR).flatMap((seg: string, i: number) => (i % 2 === 1 ? [{ t: seg, scale: 1, rise: 0 }] : titlePieces(seg)));
   const acc = (t: string): TitlePiece => ({ t, scale: 0.92, rise: 0.5 });
   // A slash chord gets a little extra air after the "/" (G-6/ E).
   const rest = (t: string): TitlePiece[] => t.split(/([\u266d\u266f]|\/)/).filter((x: string) => x !== "").map((x: string) => (x === "\u266d" || x === "\u266f" ? acc(x) : x === "/" ? { t: x, scale: 1, rise: 0, after: 0.34 } : { t: x, scale: 1, rise: 0 }));
@@ -74,7 +76,7 @@ export function titlePieces(text: string): TitlePiece[] {
   return [...out, ...rest(m[4])];
 }
 // Chord names inside running text (E-7, C9, G\u00f8) get the same lead-sheet treatment; `chordify` finds them in a string.
-const CHORD_IN_TEXT = new RegExp(`([A-G][\u266d\u266f]{0,2}(?:maj\\d*|dim\\d*|m\\d*|\u00f8\\d*|\uE18F\\d*|[\uE18A\uE187-]\\d+|\\d+)(?:/[A-G][\u266d\u266f]{0,2})?(?![\\w\u266d\u266f]))`);
+const CHORD_IN_TEXT = new RegExp(`([A-G][\u266d\u266f]{0,2}(?:\\d+sus\\d*|maj\\d*|dim\\d*|m\\d*|\u00f8\\d*|\uE18F\\d*|[\uE18A\uE187-]\\d+|\\d+)(?:/[A-G][\u266d\u266f]{0,2})?(?![\\w\u266d\u266f]))`);
 export function chordify(text: string): ReactNode {
   return text.split(CHORD_IN_TEXT).map((part: string, i: number) => (i % 2 === 1 ? <span key={i} style={{ whiteSpace: "nowrap" }}>{titleNodes(part)}</span> : part));
 }
@@ -87,7 +89,7 @@ export function chordChildren(children: ReactNode): ReactNode {
 // piece (the raised part of a name) sets MuseJazz Text itself, whatever the surrounding text is. Never bold: the font has one weight.
 export const MUSE_FONT = "'MuseJazz Text'";
 export function titleNodes(text: string, scale = 1.1): ReactNode {
-  if (text.includes(" = ")) return text.split(" = ").map((seg: string, i: number) => <span key={i}>{i ? " = " : ""}{titleNodes(seg, scale)}</span>);
+  if (PAIR.test(text)) return text.split(PAIR).map((seg: string, i: number) => (i % 2 === 1 ? <span key={i}>{seg}</span> : <span key={i}>{titleNodes(seg, scale)}</span>));
   const pieces = titlePieces(text);
   // A chord name is set as a whole in MuseJazz Text (root letter, accidentals, quality, slash bass); other text (a title like "C Mixolydian")
   // keeps the page font. `scale` evens out MuseJazz's size against the surrounding text (1 where the name is already in MuseJazz, the big title).

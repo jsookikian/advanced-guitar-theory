@@ -95,6 +95,14 @@ Run from `tests/`, with the browser path set (the variable does not survive betw
 - Leave unrelated untracked files alone (fonts/Petaluma*, tests/fontprobe*.js, tests/live*.js, tests/mixo.js).
 - Forma: `forma redeploy` (after `forma login --server https://tryforma.com`) needs confirmation; use `--clean` when files moved. GitHub Pages redeploys on push to `main`.
 
+## Sus Chords lesson (what it taught us)
+
+- A lesson that is not a Drop chord can still reuse the shared Drop `Board` (it only draws `Voice[]` on a 7-fret window); `src/lessons/sus-chords/lesson.tsx` copies the Drop screen layout (three constant control rows, name block, board, nav) around its own `theory.ts`. If a third lesson needs the same shell, extract it from both.
+- Plans drafted by another tool must be re-checked: brute-force the claims (`tests/walk.js` pins the plan's fingerings and checks every key) and fix the text where the theory disagrees (the plan called G over A a full A9sus4; it has no 5th).
+- `src/shared/notation.tsx` has chord kinds `sus4`, `sus2` and `maj` (so `G/A` is `chordSymbol("G", "maj", "A")`), `sus` is a raised quality, and a label with ` \u2194 ` (or ` = `) is set as two chord names.
+- `Tabs` always runs its labels through `titleNodes`, which reads "E-A-D-G" as a chord (E with a raised minus). Use an en dash in string-set tab labels.
+- A `ghost` on a Voice draws a dashed ring and a line to the dot; it means "where this dot was". For "where it goes next" (the G falling to F sharp) it works but reads the same; say it in the sentence.
+
 ## Link previews and share cards
 
 - `build.mjs` writes Open Graph and Twitter tags into the catalog and every lesson page. Crawlers need absolute URLs, so they come from `SITE_URL` (default the GitHub Pages site; build the Forma copy with `SITE_URL=https://advanced-guitar-theory.tryforma.com/ node build.mjs`). Runtime asset paths still use `SITE_ROOT`.
