@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "grok/canvas";
 import type { CSSProperties, ChangeEvent, ReactNode } from "grok/canvas";
-import { pluck, playPhrase, stopAll, setInstrument, INSTRUMENTS } from "../../shared/audio";
+import { pluck, playPhrase, stopAll, setInstrument, startDrone, stopDrone, INSTRUMENTS } from "../../shared/audio";
 import type { InstrumentId } from "../../shared/audio";
 import { SITE_ROOT } from "../../shared/site-root";
 import Tutorial from "../../shared/Tutorial";
@@ -441,7 +441,7 @@ const TUT_STEPS: TutStep[] = [
   { at: [0, 0], live: true, sel: ".nine-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board. Tap one to spotlight that note on the board and hear it." },
   { at: [0, 0], live: true, sel: "#nine-hear", title: "Hear it", text: "Plays what is lit on the board, so you hear exactly what the sentence is about." },
   { at: [0, 0], live: true, sel: "#nine-show", title: "Intervals or Notes", text: "Switch the dot labels between intervals ([R] [3] [5] [\u266d7]) and note names. The root is always red." },
-  { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#nine-settings", title: "Settings", text: "Key, Left-handed, Sound, Neck, Show tutorial and Share image live here." },
+  { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#nine-settings", title: "Settings", text: "Key, Left-handed, Sound, Drone, Neck, Show tutorial and Share image live here." },
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: "The lesson has eight steps. Tap any one to jump straight to it." },
   { at: [0, 0], sel: "#nine-nav", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
   { at: [2, 2], sel: ".nine-card p button[aria-pressed]", title: "Chord names are buttons", text: "A chord name with a dotted underline is a button. Tap it to count the board's intervals from that chord, and tap it again to go back." },
@@ -488,6 +488,7 @@ export default function App() {
   const [full, setFull] = useState<boolean>(false);
   const [sound, setSound] = useState<InstrumentId>("nylon");
   const [playing, setPlaying] = useState<boolean>(false);
+  const [droneOn, setDroneOn] = useState<boolean>(false);
   // Spotlight: tapping a note name in a statement dims the whole page except that note (a degree 0-11), for a moment.
   const [spot, setSpot] = useState<number | null>(null);
   const spotTimer = useRef<number>(0);
@@ -652,6 +653,11 @@ export default function App() {
     setPlaying(true);
     void playPhrase({ notes: midis, style: set ? "strum" : "arpeggio", onNote: pulseMidi }).then(() => setPlaying(false));
   };
+  // The drone is the key's root two octaves below middle C; it follows the Key setting and outlives phrases.
+  const droneMidi = 36 + k.pc;
+  const toggleDrone = (): void => { if (droneOn) { stopDrone(); setDroneOn(false); } else { startDrone(droneMidi); setDroneOn(true); } };
+  useEffect(() => { if (droneOn) startDrone(droneMidi); }, [droneMidi]);
+  useEffect(() => () => stopDrone(), []);
   // Anything that changes what is on the board silences a phrase that is still playing.
   useEffect(() => { stopAll(); setPlaying(false); window.clearTimeout(spotTimer.current); setSpot(null); }, [card, beat, shapeIdx, keyId, layerMode, frame, show]);
   const labelOf = (d: Dot): string => {
@@ -1083,6 +1089,7 @@ export default function App() {
                     {INSTRUMENTS.map((i: { id: InstrumentId; label: string }) => <option key={i.id} value={i.id} style={{ color: INK, backgroundColor: PAGE }}>{i.label}</option>)}
                   </select>
                 </Field>
+                <button type="button" className="nine-btn" id="nine-drone" aria-pressed={droneOn} style={btn(droneOn, false)} onClick={toggleDrone}>{droneOn ? `\u25a0 Drone on ${flat(keyId)}` : `\u25b6 Drone on ${flat(keyId)}`}</button>
                 <Field label="Neck" style={{ opacity: onExplore ? 1 : 0.35, pointerEvents: onExplore ? "auto" : "none", transition: "opacity 200ms ease" }}>
                   <span id="nine-full" style={{ display: "block", backgroundColor: PAGE }}>{segBtn([{ value: "scroll", label: "Scroll (Explore)" }, { value: "full", label: "Fit all" }], full ? "full" : "scroll", (v: string) => setFull(v === "full"))}</span>
                 </Field>

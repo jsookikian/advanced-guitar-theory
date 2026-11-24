@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "grok/canvas";
 import type { CSSProperties, ChangeEvent, ReactNode } from "grok/canvas";
-import { pluck, playPhrase, stopAll, setInstrument, INSTRUMENTS } from "../audio";
+import { pluck, playPhrase, stopAll, setInstrument, startDrone, stopDrone, INSTRUMENTS } from "../audio";
 import type { InstrumentId } from "../audio";
 import { SITE_ROOT } from "../site-root";
 import Tutorial from "../Tutorial";
@@ -105,7 +105,7 @@ const TUT_STEPS: TutStep[] = [
   { at: [0, 0], live: true, sel: ".drop-card p", title: "One idea at a time", text: "Read one sentence at a time. Every note and interval in the text is a circle, like the dots on the board." },
   { at: [0, 0], live: true, sel: "#drop-hear", title: "Hear it", text: "Strums the chord that is on the board." },
   { at: [0, 0], live: true, sel: "#drop-show", title: "Intervals or Names", text: "Switch the dots between intervals ([R] [3] [5] [7]) and note names. The root stays red." },
-  { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#drop-settings", title: "Settings", text: "Key, Left-handed, Sound, Show tutorial and Share image live here." },
+  { at: [0, 0], live: true, settings: true, sel: 'button[aria-label="Display settings"]', also: "#drop-settings", title: "Settings", text: "Key, Left-handed, Sound, Drone, Show tutorial and Share image live here." },
   { at: [0, 0], sel: 'nav[aria-label="Lesson steps"]', title: "The steps", text: `${WORDS[SPEC.length]} steps. Tap any one to jump straight to it.` },
   { at: [0, 0], sel: "#drop-nav", title: "Back and Continue", text: "Walk through the beats with Continue and Back. The left and right arrow keys work too." },
   { at: [0, 1], live: true, sel: "#drop-board", title: "One dot moves", text: `On the first step the closed chord drops its ${FROMTOP} note from the top, and only that dot moves. The faint ring shows where it came from.` },
@@ -140,6 +140,7 @@ function App() {
   const [tut, setTut] = useState<boolean>(false);
   const [sound, setSound] = useState<InstrumentId>("nylon");
   const [playing, setPlaying] = useState<boolean>(false);
+  const [droneOn, setDroneOn] = useState<boolean>(false);
   // Explore's picks.
   const [exQ, setExQ] = useState<QId>("maj7");
   const [exSet, setExSet] = useState<number>(0);
@@ -199,6 +200,11 @@ function App() {
   }, [card]);
   useEffect(() => { setLearnInv(0); setExPos(-1); }, [keyId]);
   const k: KeyDef = KEYS.find((x: KeyDef) => x.id === keyId) ?? KEYS[0];
+  // The drone is the key's root low down; it follows the Key setting and outlives phrases.
+  const droneMidi = 36 + k.pc;
+  const toggleDrone = (): void => { if (droneOn) { stopDrone(); setDroneOn(false); } else { startDrone(droneMidi); setDroneOn(true); } };
+  useEffect(() => { if (droneOn) startDrone(droneMidi); }, [droneMidi]);
+  useEffect(() => () => stopDrone(), []);
   const onExplore = card === EXPLORE;
   const spec0: Beat = onExplore ? { q: Q(exQ), set: exSet, inv: exInv, view: "drop" } : SPEC[card][Math.min(beat, SPEC[card].length - 1)];
   const spec: Beat = spec0.learn ? { ...spec0, inv: learnInv } : spec0;
@@ -527,6 +533,7 @@ function App() {
               <select id="drop-sound" aria-label="Sound" value={sound} onChange={(e: ChangeEvent<HTMLSelectElement>) => { const id = e.target.value as InstrumentId; setSound(id); setInstrument(id); }} style={selectStyle}>
                 {INSTRUMENTS.map((i: { id: InstrumentId; label: string }) => <option key={i.id} value={i.id} style={{ color: INK, backgroundColor: PAGE }}>{i.label}</option>)}
               </select>
+              <button type="button" className="drop-btn" id="drop-drone" aria-pressed={droneOn} style={btn(droneOn, false)} onClick={toggleDrone}>{droneOn ? `\u25a0 Drone on ${flat(keyId)}` : `\u25b6 Drone on ${flat(keyId)}`}</button>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
                 <button type="button" className="drop-btn" id="drop-settings-tutorial" style={btn(false, false)} onClick={startTutorial}>Show tutorial</button>
                 <button type="button" className="drop-btn" id="drop-share" aria-label="Share this diagram as an image" style={btn(false, false)} onClick={sharePng}>Share image</button>

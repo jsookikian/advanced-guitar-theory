@@ -204,3 +204,59 @@ export async function playPhrase(opts: { bass?: number; notes: number[]; style: 
     timers.push(window.setTimeout(res, (t0 - c.currentTime + t + sorted.length * dur + 0.5) * 1000));
   });
 }
+
+// A sustained low note under everything else. It is synthesised (the recorded notes die away) and kept out of
+// `active`, so stopAll() for a phrase never silences it; only stopDrone() does.
+let drone: { g: GainNode; oscs: OscillatorNode[]; freqs: number[] } | null = null;
+const hz = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12);
+const DRONE_LEVEL = 0.32;
+
+export function isDroneOn(): boolean { return drone !== null; }
+
+/** Start the drone on a MIDI pitch, or move a running one to that pitch. */
+export function startDrone(midi: number): void {
+  const c = ensure();
+  if (!c || !bus) return;
+  const f = hz(midi);
+  if (drone) {
+    drone.oscs.forEach((o: OscillatorNode, i: number) => o.frequency.setTargetAtTime(f * drone!.freqs[i], c.currentTime, 0.08));
+    return;
+  }
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, c.currentTime);
+  g.gain.linearRampToValueAtTime(DRONE_LEVEL, c.currentTime + 0.6);
+  const lp = c.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 900;
+  lp.connect(g);
+  g.connect(bus);
+  // Fundamental, a slightly detuned octave for body, and a quiet fifth above that so it reads on a phone speaker.
+  const parts: Array<{ ratio: number; type: OscillatorType; level: number; detune: number }> = [
+    { ratio: 1, type: "sine", level: 1, detune: 0 },
+    { ratio: 2, type: "triangle", level: 0.5, detune: 4 },
+    { ratio: 3, type: "sine", level: 0.12, detune: -3 },
+  ];
+  const oscs = parts.map((p) => {
+    const o = c.createOscillator();
+    o.type = p.type;
+    o.frequency.value = f * p.ratio;
+    o.detune.value = p.detune;
+    const pg = c.createGain();
+    pg.gain.value = p.level;
+    o.connect(pg);
+    pg.connect(lp);
+    o.start();
+    return o;
+  });
+  drone = { g, oscs, freqs: parts.map((p) => p.ratio) };
+}
+
+export function stopDrone(): void {
+  if (!drone || !ctx) { drone = null; return; }
+  const { g, oscs } = drone;
+  drone = null;
+  const now = ctx.currentTime;
+  g.gain.cancelScheduledValues(now);
+  g.gain.setTargetAtTime(0, now, 0.15);
+  oscs.forEach((o: OscillatorNode) => { try { o.stop(now + 1); } catch { /* already stopped */ } });
+}
