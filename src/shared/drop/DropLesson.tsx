@@ -403,7 +403,7 @@ function App() {
     + " #drop-root button,#drop-root select{-webkit-appearance:none;appearance:none;margin:0;font-family:inherit}"
     + " #drop-root button:focus-visible,#drop-root select:focus-visible{outline:2px solid #0f766e;outline-offset:2px}"
     + " #drop-root .drop-btn:hover:not(:disabled){filter:brightness(.96)} #drop-root .drop-btn-primary:hover:not(:disabled){filter:brightness(1.15)}"
-    + " #drop-root .drop-card{height:108px} @media (max-width:600px){#drop-root .drop-card{height:128px}}"
+    + ""
     + " @media (max-width:340px){#drop-root .drop-step span:last-child{font-size:9px!important;letter-spacing:-.1px} #drop-root nav[aria-label='Lesson steps']{gap:1px!important}}"
     + " @media (max-width:380px){#drop-root .drop-step span:last-child{font-size:10px!important}}"
     + " @font-face{font-family:'MuseJazz Text';src:url('" + SITE_ROOT + "fonts/MuseJazzText.otf') format('opentype');font-display:swap}"
@@ -471,25 +471,16 @@ function App() {
           ))}
         </nav>
         </StickyHeader>
-        <div style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, backgroundColor: PAGE }}>
-            {HELPFUL.length > 0 ? <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={textLink}>{helpOpen ? "Helps to know ▴" : "Helps to know ▾"}</button> : null}
-            <button type="button" id="drop-tutorial" onClick={startTutorial} style={textLink}>Show tutorial</button>
-          </div>
-          {helpOpen && HELPFUL.length > 0 ? (
-            <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
-              {HELPFUL.map((h: Helpful) => <li key={h.topic} style={{ backgroundColor: PAGE }}>{h.href ? <a href={SITE_ROOT + h.href} style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</span>}: {chordify(h.why)}</li>)}
-            </ul>
-          ) : null}
-        </div>
-
-        <div className="drop-card" style={{ position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", backgroundColor: PAGE }}>
-          <div key={`card${card}-${beat}`} style={{ display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
+        {/* Every beat of the step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
+        <div className="drop-card" style={{ position: "relative", overflow: "hidden", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", backgroundColor: PAGE }}>
+          <div key={`card${card}-${beat}`} style={{ gridArea: "1 / 1", alignSelf: "end", display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
             {beatDots}{head(cb.head ?? sc.head)}{line(cb.text)}
           </div>
+          {sc.beats.map((b, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "end", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(b.head ?? sc.head)}{line(b.text)}</div>)}
         </div>
 
-        {/* Three control rows on every step, so the page never changes height: Explore's pickers sit in the rows the guided steps leave for the Minor/Major switch, Hear it and the label pill. */}
+        {/* Explore has three control rows; the guided steps have two (Hear it, then the settings row), plus a first row on the ii V i step for the Minor / Major switch. */}
+        {onExplore || wk ? (
         <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
           {onExplore
             ? tabs("Chord", QUALITIES.map((x: Quality) => ({ value: x.id, label: chordName(k, x) })), exQ, (v: string) => setExQ(v as QId), "drop-quality", 11.5)
@@ -502,11 +493,12 @@ function App() {
                 </div>
               ) : null}</>}
         </div>
-        <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
-          {onExplore
-            ? tabs("Bass string", dt.sets.map((s: number) => ({ value: String(s), label: BASS_LABELS[s] })), String(exSet), (v: string) => { setExSet(Number(v)); setExPos(-1); }, "drop-sets", 12)
-            : <button type="button" className="drop-btn" id="drop-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), flex: 1, height: 36 }}>{playing ? "■ Stop" : wk ? "▶ Play the round" : "▶ Hear it"}</button>}
-        </div>
+        ) : null}
+        {onExplore ? (
+          <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
+            {tabs("Bass string", dt.sets.map((s: number) => ({ value: String(s), label: BASS_LABELS[s] })), String(exSet), (v: string) => { setExSet(Number(v)); setExPos(-1); }, "drop-sets", 12)}
+          </div>
+        ) : null}
         <div style={{ height: 36, display: "flex", alignItems: "center", gap: 10, backgroundColor: PAGE }}>
           {onExplore
             ? tabs("Inversion", [0, 1, 2, 3].map((i: number) => ({ value: String(i), label: ["Root", "1st", "2nd", "3rd"][i] })), String(exInv), (v: string) => { setExInv(Number(v)); setExPos(-1); }, "drop-inv")
@@ -537,14 +529,25 @@ function App() {
                 <button type="button" className="drop-btn" id="drop-settings-tutorial" style={btn(false, false)} onClick={startTutorial}>Show tutorial</button>
                 <button type="button" className="drop-btn" id="drop-share" aria-label="Share this diagram as an image" style={btn(false, false)} onClick={sharePng}>Share image</button>
               </div>
+              {HELPFUL.length > 0 ? (
+                <div style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
+                  <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={textLink}>{helpOpen ? "Helps to know ▴" : "Helps to know ▾"}</button>
+                  {helpOpen ? <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
+              {HELPFUL.map((h: Helpful) => <li key={h.topic} style={{ backgroundColor: PAGE }}>{h.href ? <a href={SITE_ROOT + h.href} style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</span>}: {chordify(h.why)}</li>)}
+            </ul> : null}
+                </div>
+              ) : null}
+              <p id="drop-credit" style={{ margin: 0, fontFamily: SANS, fontSize: 11.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>
+          Further reading: <a href={cfg.credit.href} target="_blank" rel="noopener noreferrer" style={{ color: INK2, backgroundColor: PAGE }}>{cfg.credit.label}</a>
+        </p>
             </div>
           </div>
         </div>
 
-        <div id="drop-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
+        <div id="drop-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: onExplore ? 48 : 61, padding: "14px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
           <div style={{ minWidth: 0, backgroundColor: PAGE }}>
             <div id="drop-name-title" style={{ fontFamily: REALBOOK, fontSize: nameTitle.length > 12 ? 26 : 32, fontWeight: 400, lineHeight: "34px", letterSpacing: 0, color: INK, backgroundColor: PAGE, minHeight: 34 }}>{titleNodes(nameTitle, 1)}</div>
-            <div id="drop-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", minHeight: 16, color: INK2, backgroundColor: PAGE }}>{nameSub}</div>
+            {onExplore ? null : <div id="drop-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", minHeight: 16, color: INK2, backgroundColor: PAGE }}>{nameSub}</div>}
           </div>
           {iconBtn("drop-share-quick", "Share this diagram as an image", sharePng, (
             <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
@@ -567,13 +570,12 @@ function App() {
             );
           })}
         </div>
-        <div id="drop-nav" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
+        {/* Under the diagram, so the sound is one tap from what is being looked at. */}
+        <button type="button" className="drop-btn" id="drop-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), width: "100%", height: 36 }}>{playing ? "■ Stop" : wk ? "▶ Play the round" : "▶ Hear it"}</button>
+        <div id="drop-nav" className="agt-bottombar" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
           <button type="button" className="drop-btn" style={{ ...btn(false, card === 0 && beat === 0), height: 44, fontSize: 15 }} disabled={card === 0 && beat === 0} onClick={prev}>{"← Back"}</button>
           <button type="button" className="drop-btn drop-btn-primary" style={{ ...btn(true, false), height: 44, fontSize: 15 }} onClick={next}>{card === total - 1 ? "Start over" : "Continue →"}</button>
         </div>
-        <p id="drop-credit" style={{ margin: "4px 0 0", fontFamily: SANS, fontSize: 11.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>
-          Further reading: <a href={cfg.credit.href} target="_blank" rel="noopener noreferrer" style={{ color: INK2, backgroundColor: PAGE }}>{cfg.credit.label}</a>
-        </p>
       </div>
       {tut ? <Tutorial steps={TUT_STEPS} onStep={(st: TutStep): boolean => { const at = st.at ?? [0, 0]; const wantOpen = st.settings === true; const moved = at[0] !== cardRef.current || at[1] !== beatRef.current || wantOpen !== openRef.current; go(at[0], at[1]); setOpen(wantOpen); return moved; }} onClose={endTutorial} /> : null}
     </div>

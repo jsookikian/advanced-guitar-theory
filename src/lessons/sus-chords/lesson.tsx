@@ -351,8 +351,6 @@ function App() {
   const cb: Say = sc.beats[Math.min(bi, sc.beats.length - 1)];
   const exWhich = exChord === 0 ? "a" : "b";
   const nameSub = onExplore ? `Position ${exPi + 1} of ${exList.length} · ${BASS_LABELS[exSet]}` : cb.sub;
-  const vampCap = spec.over === 5 ? `over ${d7} · bars 3 and 4` : `over ${am7} · bars 1 and 2`;
-  const caption = spec.sc === "vamp" ? (spec.reread ? "counted from the key root" : vampCap) : "";
 
   const sharePng = (): void => {
     const svg = document.getElementById("drop-board") as SVGSVGElement | null;
@@ -367,7 +365,7 @@ const css = ":root,html,body{color-scheme:only light!important;background:#fdfcf
     + " #drop-root button,#drop-root select{-webkit-appearance:none;appearance:none;margin:0;font-family:inherit}"
     + " #drop-root button:focus-visible,#drop-root select:focus-visible{outline:2px solid #0f766e;outline-offset:2px}"
     + " #drop-root .drop-btn:hover:not(:disabled){filter:brightness(.96)} #drop-root .drop-btn-primary:hover:not(:disabled){filter:brightness(1.15)}"
-    + " #drop-root .drop-card{height:108px} @media (max-width:600px){#drop-root .drop-card{height:128px}}"
+    + ""
     + " @media (max-width:340px){#drop-root .drop-step span:last-child{font-size:9px!important;letter-spacing:-.1px} #drop-root nav[aria-label='Lesson steps']{gap:1px!important}}"
     + " @media (max-width:380px){#drop-root .drop-step span:last-child{font-size:10px!important}}"
     + " @font-face{font-family:'MuseJazz Text';src:url('" + SITE_ROOT + "fonts/MuseJazzText.otf') format('opentype');font-display:swap}"
@@ -438,39 +436,28 @@ const css = ":root,html,body{color-scheme:only light!important;background:#fdfcf
           ))}
         </nav>
         </StickyHeader>
-        <div style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, backgroundColor: PAGE }}>
-            {HELPFUL.length > 0 ? <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={textLink}>{helpOpen ? "Helps to know ▴" : "Helps to know ▾"}</button> : null}
-            <button type="button" id="drop-tutorial" onClick={startTutorial} style={textLink}>Show tutorial</button>
-          </div>
-          {helpOpen && HELPFUL.length > 0 ? (
-            <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
-              {HELPFUL.map((h: Helpful) => <li key={h.topic} style={{ backgroundColor: PAGE }}>{h.href ? <a href={SITE_ROOT + h.href} style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</span>}: {chordify(h.why)}</li>)}
-            </ul>
-          ) : null}
-        </div>
-
-        <div className="drop-card" style={{ position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", backgroundColor: PAGE }}>
-          <div key={`card${card}-${bi}`} style={{ display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
+        {/* Every beat of the step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
+        <div className="drop-card" style={{ position: "relative", overflow: "hidden", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", backgroundColor: PAGE }}>
+          <div key={`card${card}-${bi}`} style={{ gridArea: "1 / 1", alignSelf: "end", display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "drop-r" : "drop-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>
             {beatDots}{head(sc.head)}{line(cb.text)}
           </div>
+          {sc.beats.map((b, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "end", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(sc.head)}{line(b.text)}</div>)}
         </div>
 
-        {/* Three control rows on every step, so the page never changes height: Explore's pickers sit where the guided steps keep their caption and Hear it. */}
-        <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
-          {onExplore
-            ? setTabs(exSet, (n: number) => { setExPos(nearestPos(pairPositions(k, exPair, n), exList[exPi])); setExSet(n); }, "drop-sets", true)
-            : <div id="drop-caption" style={{ flex: 1, minWidth: 0, fontFamily: SANS, fontSize: 12, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>{chordify(caption)}</div>}
-        </div>
-        <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
-          {onExplore
-            ? tabs("Chord pair", pairLabels.map((l: string, i: number) => ({ value: String(i), label: l })), String(exPair), (v: string) => { setExPair(Number(v)); setExChord(0); }, "drop-pair", 10.5)
-            : <button type="button" className="drop-btn" id="drop-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), flex: 1, height: 36 }}>{playing ? "■ Stop" : spec.sc === "walk" ? "▶ Play the position" : "▶ Hear it"}</button>}
-        </div>
+        {/* Explore has three control rows (string set, chord pair, chord); the guided steps have two (Hear it, then the settings row). */}
+        {onExplore ? (
+          <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
+            {setTabs(exSet, (n: number) => { setExPos(nearestPos(pairPositions(k, exPair, n), exList[exPi])); setExSet(n); }, "drop-sets", true)}
+          </div>
+        ) : null}
+        {onExplore ? (
+          <div style={{ height: 36, display: "flex", alignItems: "center", gap: 8, backgroundColor: PAGE }}>
+            {tabs("Chord pair", pairLabels.map((l: string, i: number) => ({ value: String(i), label: l })), String(exPair), (v: string) => { setExPair(Number(v)); setExChord(0); }, "drop-pair", 10.5)}
+          </div>
+        ) : null}
         <div style={{ height: 36, display: "flex", alignItems: "center", gap: 10, backgroundColor: PAGE }}>
           {onExplore
-            ? <>{tabs("Chord", [pairName(exPair, 0), pairName(exPair, 1)].map((l: string, i: number) => ({ value: String(i), label: l })), String(exChord), (v: string) => setExChord(Number(v)), "drop-chord")}
-              <button type="button" className="drop-btn" id="drop-hear" aria-pressed={playing} aria-label={playing ? "Stop" : "Hear it"} onClick={playShown} style={{ ...btn(false, false), flex: "0 0 auto", width: 40, padding: 0 }}>{playing ? "\u25a0" : "\u25b6"}</button></>
+            ? tabs("Chord", [pairName(exPair, 0), pairName(exPair, 1)].map((l: string, i: number) => ({ value: String(i), label: l })), String(exChord), (v: string) => setExChord(Number(v)), "drop-chord")
             : card === WALK ? setTabs(walkSet, (n: number) => { setBeat(nearestPos(pairPositions(k, 0, n), walkList[Math.min(spec.pos ?? 0, walkList.length - 1)]) * 2 + (bi % 2)); setWalkSet(n); }, "drop-walkset") : <div style={{ flex: 1 }} />}
           {onExplore ? pill : null}
           {settingsToggle}
@@ -496,14 +483,25 @@ const css = ":root,html,body{color-scheme:only light!important;background:#fdfcf
                 <button type="button" className="drop-btn" id="drop-settings-tutorial" style={btn(false, false)} onClick={startTutorial}>Show tutorial</button>
                 <button type="button" className="drop-btn" id="drop-share" aria-label="Share this diagram as an image" style={btn(false, false)} onClick={sharePng}>Share image</button>
               </div>
+              {HELPFUL.length > 0 ? (
+                <div style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
+                  <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={textLink}>{helpOpen ? "Helps to know ▴" : "Helps to know ▾"}</button>
+                  {helpOpen ? <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
+              {HELPFUL.map((h: Helpful) => <li key={h.topic} style={{ backgroundColor: PAGE }}>{h.href ? <a href={SITE_ROOT + h.href} style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</span>}: {chordify(h.why)}</li>)}
+            </ul> : null}
+                </div>
+              ) : null}
+              <p id="drop-credit" style={{ margin: 0, fontFamily: SANS, fontSize: 11.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>
+          Further reading: <a href="https://youtu.be/AQ_mUG8oCNQ" target="_blank" rel="noopener noreferrer" style={{ color: INK2, backgroundColor: PAGE }}>How to use sus chords in your everyday playing (video)</a>
+        </p>
             </div>
           </div>
         </div>
 
-        <div id="drop-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
+        <div id="drop-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: onExplore ? 48 : 61, padding: "14px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
           <div style={{ minWidth: 0, backgroundColor: PAGE }}>
             <div id="drop-name-title" style={{ fontFamily: REALBOOK, fontSize: name.length > 12 ? 26 : 32, fontWeight: 400, lineHeight: "34px", letterSpacing: 0, color: INK, backgroundColor: PAGE, minHeight: 34 }}>{titleNodes(name, 1)}</div>
-            <div id="drop-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", minHeight: 16, color: INK2, backgroundColor: PAGE }}>{nameSub}</div>
+            {onExplore ? null : <div id="drop-name-sub" style={{ marginTop: 2, fontFamily: SANS, fontSize: 13, fontWeight: 400, lineHeight: "16px", minHeight: 16, color: INK2, backgroundColor: PAGE }}>{nameSub}</div>}
           </div>
           {iconBtn("drop-share-quick", "Share this diagram as an image", sharePng, (
             <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" style={{ display: "block" }}>
@@ -526,13 +524,12 @@ const css = ":root,html,body{color-scheme:only light!important;background:#fdfcf
             );
           })}
         </div>
-        <div id="drop-nav" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
+        {/* Under the diagram, so the sound is one tap from what is being looked at. */}
+        <button type="button" className="drop-btn" id="drop-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), width: "100%", height: 36 }}>{playing ? "■ Stop" : spec.sc === "walk" ? "▶ Play the position" : "▶ Hear it"}</button>
+        <div id="drop-nav" className="agt-bottombar" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
           <button type="button" className="drop-btn" style={{ ...btn(false, card === 0 && bi === 0), height: 44, fontSize: 15 }} disabled={card === 0 && bi === 0} onClick={prev}>{"← Back"}</button>
           <button type="button" className="drop-btn drop-btn-primary" style={{ ...btn(true, false), height: 44, fontSize: 15 }} onClick={next}>{card === TOTAL - 1 ? "Start over" : "Continue →"}</button>
         </div>
-        <p id="drop-credit" style={{ margin: "4px 0 0", fontFamily: SANS, fontSize: 11.5, lineHeight: "16px", color: INK2, backgroundColor: PAGE }}>
-          Further reading: <a href="https://youtu.be/AQ_mUG8oCNQ" target="_blank" rel="noopener noreferrer" style={{ color: INK2, backgroundColor: PAGE }}>How to use sus chords in your everyday playing (video)</a>
-        </p>
       </div>
       {tut ? <Tutorial steps={TUT_STEPS} onStep={(st: TutStep): boolean => { const at = st.at ?? [0, 0]; const wantOpen = st.settings === true; const moved = at[0] !== cardRef.current || at[1] !== beatRef.current || wantOpen !== openRef.current; go(at[0], at[1]); setOpen(wantOpen); return moved; }} onClose={endTutorial} /> : null}
     </div>

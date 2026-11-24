@@ -68,4 +68,7 @@ export function StickyHeader(props: { children: ReactNode }) {
   return <div data-sticky="1" className="agt-sticky" style={{ backgroundColor: PAGE }}>{props.children}</div>;
 }
 export const STICKY_CSS = ".agt-sticky{display:flex;flex-direction:column;gap:8px} @media (max-width:600px){.agt-sticky{position:sticky;top:0;z-index:40;margin:-12px -16px 0;padding:12px 16px 6px;background:#fdfcfb;border-bottom:1px solid #dcd5d4}}"
+  + " @media (max-width:600px){.agt-sticky h1{font-size:18px!important;line-height:22px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}"
+  + " body{padding-bottom:64px!important} .agt-bottombar{position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0!important;padding:8px 16px calc(8px + env(safe-area-inset-bottom));background:#fdfcfb!important;border-top:1px solid #dcd5d4}"
+  + " .agt-bottombar button{height:40px!important;font-size:14px!important}}"
   + " html,body{overflow-x:clip!important}";

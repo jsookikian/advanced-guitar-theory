@@ -42,7 +42,7 @@ Run the browser checks from `tests/` (see `lessons/dominant-pentatonics/README.m
 3. `npm run build`. The build writes `lessons/<id>/index.html` and `app.js` and adds the lesson to the catalog.
 4. Commit the source and the generated files together: a Forma Managed space serves the files exactly as committed, there is no build step on the server.
 
-House rules every lesson follows (from lesson 1): white paper look, light only, no layout shift between steps, copy above the board, every root a red R, 36px controls, no sideways page scroll at 320px.
+House rules every lesson follows (from lesson 1): white paper look, light only, no layout shift between the beats of a step, copy above the board, Back / Continue pinned to the bottom on phones, every root a red R, 36px controls, no sideways page scroll at 320px.
 
 ## Forma
 

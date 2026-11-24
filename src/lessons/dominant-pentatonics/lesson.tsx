@@ -962,7 +962,7 @@ export default function App() {
     + " #nine-root .nine-seg button::after{content:'';position:absolute;inset:0;background:#4d3533;opacity:0;transition:opacity 150ms ease;pointer-events:none}"
     + " #nine-root .nine-seg button[aria-checked=false]:hover::after{opacity:.07}"
     + " #nine-root .nine-btn:hover:not(:disabled){filter:brightness(.96)} #nine-root .nine-btn-primary:hover:not(:disabled){filter:brightness(1.15)}"
-    + " #nine-root .nine-card{height:100px} #nine-root .nine-card.nine-tall{height:68px} @media (max-width:600px){#nine-root .nine-card{height:118px} #nine-root .nine-card.nine-tall{height:68px}}"
+    + " #nine-root .nine-card.nine-tall{height:68px}"
     + " @media (max-width:380px){#nine-root .nine-layers button{font-size:11.5px!important;padding:0 1px!important}}"
     + " #nine-root .nine-long{display:none} @media (min-width:560px){#nine-root .nine-short{display:none} #nine-root .nine-long{display:inline}}"
     + " @media (max-width:380px){#nine-root .nine-step span:last-child{font-size:10px!important}}"
@@ -970,7 +970,6 @@ export default function App() {
     + " #nine-root .nine-shbtn{display:flex;align-items:center;justify-content:center;gap:5px;flex-direction:row;overflow:hidden} #nine-root .nine-shbtn .cap{font-size:12px;line-height:14px;font-weight:500} #nine-root .nine-shbtn .num{font-size:14px;line-height:16px;font-weight:600}"
     + " @media (max-width:380px){#nine-root .nine-shbtn{flex-direction:column;gap:0} #nine-root .nine-shbtn .cap{font-size:9.5px;line-height:10px} #nine-root .nine-shbtn .num{font-size:15px;line-height:17px}}"
     + " #nine-root .nine-q{transition:opacity 260ms ease}"
-    + " #nine-root[data-guided='1'] .nine-quiet{opacity:.42} #nine-root[data-guided='1'] .nine-quiet:hover,#nine-root[data-guided='1'] .nine-quiet:focus-within{opacity:1}"
     + " #nine-root[data-spot='1'] .nine-q,#nine-root[data-spot='1'] .nine-quiet{opacity:.14!important}"
     + " @font-face{font-family:'MuseJazz Text';src:url('" + SITE_ROOT + "fonts/MuseJazzText.otf') format('opentype');font-display:swap}"
     + " @font-face{font-family:'MuseJazz Text';src:url('" + SITE_ROOT + "fonts/MuseJazz.otf') format('opentype');unicode-range:U+266D,U+266F;font-display:swap}"
@@ -1023,27 +1022,11 @@ export default function App() {
           ))}
         </nav>
         </StickyHeader>
-        {/* On every step, so the page never changes height as you move between steps. */}
-        <div className={helpOpen ? "nine-q" : "nine-q nine-quiet"} style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, backgroundColor: PAGE }}>
-            {HELPFUL.length > 0 ? <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{helpOpen ? "Helps to know \u25b4" : "Helps to know \u25be"}</button> : null}
-            <button type="button" id="nine-tutorial" onClick={startTutorial} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>Show tutorial</button>
-          </div>
-          {helpOpen && HELPFUL.length > 0 ? (
-            <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
-              {HELPFUL.map((h: Helpful) => (
-                <li key={h.topic} style={{ backgroundColor: PAGE }}>
-                  {h.href ? <a href={SITE_ROOT + h.href} style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</span>}
-                  {h.href ? "" : " (coming soon)"}: {chordify(h.why)}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-
-        <div className={C.kind === "explore" ? "nine-card nine-tall" : "nine-card"} style={{ position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", backgroundColor: PAGE }}>
+        {/* Every beat of a guided step is laid out invisibly in the same cell, so the card is as tall as the step's longest text and the board never moves within a step. */}
+        <div className={C.kind === "explore" ? "nine-card nine-tall" : "nine-card"} style={{ position: "relative", overflow: "hidden", display: guided ? "grid" : "flex", gridTemplateColumns: "minmax(0, 1fr)", flexDirection: "column", justifyContent: guided ? "stretch" : "flex-end", backgroundColor: PAGE }}>
           {!guided ? <div style={{ position: "absolute", top: 0, right: 0, display: "flex", alignItems: "center", gap: 4, zIndex: 1, backgroundColor: PAGE }}>{playToggle}{settingsToggle}</div> : null}
-          <div key={`card${card}-${beat}`} style={{ display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
+          <div key={`card${card}-${beat}`} style={{ ...(guided ? { gridArea: "1 / 1", alignSelf: "end" } : {}), display: "flex", flexDirection: "column", gap: 4, animation: `${dir > 0 ? "nine-r" : "nine-l"} 340ms ${EASE} both`, backgroundColor: PAGE }}>{body}</div>
+          {content ? content.beats.map((b: { text: ReactNode; name: string }, i: number) => <div key={i} aria-hidden="true" style={{ gridArea: "1 / 1", alignSelf: "end", visibility: "hidden", display: "flex", flexDirection: "column", gap: 4 }}>{beatDots}{head(content.head)}{line(b.text)}</div>) : null}
         </div>
 
         <div className="nine-q" style={{ minHeight: guided ? 34 : 42, minWidth: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: SANS, fontSize: 12, color: INK2, backgroundColor: PAGE, lineHeight: "16px" }}>
@@ -1097,13 +1080,24 @@ export default function App() {
                   <button type="button" className="nine-btn" id="nine-settings-tutorial" style={btn(false, false)} onClick={startTutorial}>Show tutorial</button>
                   <button type="button" className="nine-btn" aria-label="Share this diagram as an image" id="nine-share" style={btn(false, false)} onClick={() => { void sharePng(); }}>Share image</button>
                 </div>
+                {HELPFUL.length > 0 ? (
+                  <div style={{ backgroundColor: PAGE, fontFamily: SANS, fontSize: 12.5, lineHeight: "18px", color: INK2 }}>
+                    <button type="button" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)} style={{ padding: 0, border: 0, boxShadow: "none", cursor: "pointer", font: "inherit", color: INK2, backgroundColor: PAGE, textDecoration: "underline", textUnderlineOffset: 2 }}>{helpOpen ? "Helps to know ▴" : "Helps to know ▾"}</button>
+                    {helpOpen ? <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3, backgroundColor: PAGE }}>
+              {HELPFUL.map((h: Helpful) => (
+                <li key={h.topic} style={{ backgroundColor: PAGE }}>
+                  {h.href ? <a href={SITE_ROOT + h.href} style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</a> : <span style={{ color: INK, backgroundColor: PAGE }}>{chordify(h.topic)}</span>}
+                  {h.href ? "" : " (coming soon)"}: {chordify(h.why)}
+                </li>
+              ))}
+            </ul> : null}
+                  </div>
+                ) : null}
               </div>
           </div>
         </div>
         {/* Shape row: pick Shape 1-5 directly (nearest position), or use the board arrows / swipe to walk the whole neck. */}
-        {guided ? (
-        <button type="button" className="nine-btn nine-q" id="nine-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), width: "100%", height: 36 }}>{playing ? "\u25a0 Stop" : "\u25b6 Hear it"}</button>
-        ) : (
+        {!guided ? (
         <div className="nine-q" id="nine-shape" data-p={cur.p + 1} data-lo={cur.lo} data-hi={cur.hi} role="radiogroup" aria-label="Shape" style={{ display: "grid", gridTemplateColumns: [0, 1, 2, 3, 4].map((p: number) => `minmax(0, 1fr)`).join(" "), height: 36, minWidth: 0, borderBottom: `1px solid ${LINE}`, overflow: "hidden", boxSizing: "border-box", backgroundColor: PAGE }}>
           {[0, 1, 2, 3, 4].map((p: number) => {
             const inner = (
@@ -1114,8 +1108,8 @@ export default function App() {
             return inner;
           })}
         </div>
-        )}
-        <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
+        ) : null}
+        <div id="nine-name" aria-live="polite" style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: C.kind === "voicing" ? 63 : 55, padding: "9px 36px 0", boxSizing: "border-box", backgroundColor: PAGE, textAlign: "center" }}>
           {/* Equal air above the name and between it and the first dot: the board has its own 9px of padding, so the block starts 9px down; a lone name sits 9px lower in the block so the board never moves. */}
           <div style={{ minWidth: 0, marginTop: nameSub ? 0 : 6, backgroundColor: PAGE }}>
             <div id="nine-name-title" style={{ fontFamily: REALBOOK, fontSize: nameTitle.length > 20 ? 25 : 32, fontWeight: 400, lineHeight: "34px", letterSpacing: 0, color: INK, backgroundColor: PAGE, overflowWrap: "anywhere" }}>{titleNodes(nameTitle, 1)}</div>
@@ -1153,7 +1147,9 @@ export default function App() {
             })}
           </div>
         ) : null}
-        <div id="nine-nav" className="nine-q" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
+        {/* Under the diagram, so the sound is one tap from what is being looked at. */}
+        {guided ? <button type="button" className="nine-btn nine-q" id="nine-hear" aria-pressed={playing} onClick={playShown} style={{ ...btn(false, false), width: "100%", height: 36 }}>{playing ? "\u25a0 Stop" : "\u25b6 Hear it"}</button> : null}
+        <div id="nine-nav" className="nine-q agt-bottombar" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, backgroundColor: PAGE }}>
           <button type="button" className="nine-btn" style={{ ...btn(false, card === 0 && beat === 0), height: 44, fontSize: 15 }} disabled={card === 0 && beat === 0} onClick={() => prev()}>{"\u2190 Back"}</button>
           <button type="button" className="nine-btn nine-btn-primary" style={{ ...btn(true, false), height: 44, fontSize: 15 }} onClick={() => next()}>{card === total - 1 ? "Start over" : "Continue \u2192"}</button>
         </div>

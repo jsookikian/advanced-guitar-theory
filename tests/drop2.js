@@ -26,7 +26,7 @@ const heights=new Set();
 for(let c=0;c<NB.length;c++){await step(c);for(let k=0;k<NB[c];k++){fails.push(...await scan(`step ${c+1} beat ${k+1}`));const g=await geom();heights.add(g.h);if(g.cardOver>0)F(`step ${c+1} beat ${k+1}: text overflows its card by ${g.cardOver}px`);if(g.overflowX>0)F(`step ${c+1} beat ${k+1}: sideways overflow ${g.overflowX}px`);if(k<NB[c]-1)await cont();}}
 if(heights.size!==1)F('page height changes between beats: '+[...heights].join(','));
 await step(0);await pg.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Helps to know')).click());await S(300);fails.push(...await scan('helps to know'));
-await pg.evaluate(()=>document.getElementById('drop-tutorial').click());await S(800);
+await pg.evaluate(()=>document.getElementById('drop-settings-tutorial').click());await S(800);
 for(let i=0;i<16;i++){fails.push(...await scan('tutorial '+(i+1)));await pg.evaluate(()=>[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='Next'||b.textContent==='Done').click());await S(700);}
 await pg.reload();await S(700);
 for(const W of [320,360,390]){await pg.setViewport({width:W,height:800,isMobile:true,hasTouch:true});await pg.reload();await S(600);

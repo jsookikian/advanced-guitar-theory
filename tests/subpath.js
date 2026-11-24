@@ -17,7 +17,7 @@ if(!info.home.includes(PRE))fails.push('All lessons link is not under the prefix
 await pg.evaluate(()=>document.querySelectorAll('nav[aria-label="Lesson steps"] button')[7].click());await S(700);
 const font=await pg.evaluate(async()=>{await document.fonts.load('400 32px "MuseJazz Text"','C♭');return [...document.fonts].filter(f=>f.status==='loaded'&&f.family.includes('MuseJazz')).length;});
 if(font<1)fails.push('MuseJazz font did not load under the subpath');
-await pg.evaluate(()=>document.getElementById('nine-tutorial')&&0);
+await pg.evaluate(()=>document.getElementById('nine-settings-tutorial')&&0);
 await pg.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.id==='nine-play').click());await S(2500);
 bad.forEach(x=>fails.push('request failed: '+x));
 console.log(JSON.stringify(info),'fonts loaded:',font);console.log(fails.length?fails.join('\n'):'ok');console.log('fails',fails.length);

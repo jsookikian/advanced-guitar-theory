@@ -23,6 +23,15 @@ const pill = (primary: boolean): CSSProperties => ({
   fontFamily: SANS, fontSize: 14, fontWeight: 500, lineHeight: "18px", color: primary ? PAGE : INK, backgroundColor: primary ? INK : PAGE,
 });
 
+// The part of the window the page content can actually be seen in: below a pinned header and above a fixed bottom bar (both phone-only).
+function visibleLimits(): { top: number; bottom: number } {
+  const hd = document.querySelector(".agt-sticky") as HTMLElement | null;
+  const bar = document.querySelector(".agt-bottombar") as HTMLElement | null;
+  const top = hd && getComputedStyle(hd).position === "sticky" ? hd.getBoundingClientRect().bottom : 0;
+  const bottom = bar && getComputedStyle(bar).position === "fixed" ? bar.getBoundingClientRect().top : window.innerHeight;
+  return { top, bottom };
+}
+
 export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep) => boolean; onClose: (finished: boolean) => void }) {
   const { steps, onStep, onClose } = props;
   const [i, setI] = useState<number>(0);
@@ -61,7 +70,8 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
       const el = document.querySelector(step.sel);
       if (!el) { if (tries++ < 20) timers.push(window.setTimeout(find, 100)); return; }
       const r = el.getBoundingClientRect();
-      if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "center" });
+      const lim = visibleLimits();
+      if (!el.closest(".agt-sticky, .agt-bottombar") && (r.top < lim.top || r.bottom > lim.bottom)) el.scrollIntoView({ block: "center" });
       measure(true);
     };
     // 420 ms covers the card's 340 ms slide and the settings panel's 280 ms; measuring once, after it, means the spotlight never chases moving content.
@@ -75,7 +85,7 @@ export default function Tutorial(props: { steps: TutStep[]; onStep: (s: TutStep)
   // Put the note right below the lit control, or above it when there is no room; never off screen.
   useLayoutEffect(() => {
     const h = cardRef.current ? cardRef.current.offsetHeight : 0;
-    const vh = window.innerHeight;
+    const vh = visibleLimits().bottom;
     if (!box) { setCardTop(Math.max(12, vh - h - 12)); return; }
     let t = box.top + box.height + 18;
     if (t + h > vh - 8) t = box.top - 18 - h;

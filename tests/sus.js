@@ -20,14 +20,14 @@ const p = require('puppeteer-core'); const tok = require('../src/shared/tokens.j
 
   for (const W of [390, 360, 320]) {
     await pg.setViewport({ width: W, height: 844 }); await pg.goto(URL); await S(900);
-    const heights = new Set(), tops = new Set(); let total = 0;
-    for (let c = 0; c < 7; c++) { await at(c, 0); const n = FIXED[c] || await beatsIn(); for (let k = 0; k < n; k++) {
+    let total = 0;
+    for (let c = 0; c < 7; c++) { const heights = new Set(), tops = new Set(); await at(c, 0); const n = FIXED[c] || await beatsIn(); for (let k = 0; k < n; k++) {
       await at(c, k); total++; if (W === 390) (await scan(`card ${c + 1} beat ${k + 1}`)).forEach(F);
       heights.add(await pg.evaluate(() => Math.round(document.getElementById('drop-root').getBoundingClientRect().height)));
       tops.add(await pg.evaluate(() => Math.round(document.getElementById('drop-board').getBoundingClientRect().top)));
       const nd = (await dots()).length; if (nd !== 4) F(`${W}: card ${c + 1} beat ${k + 1} shows ${nd} dots`);
-      if (await pg.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) F(`${W}: card ${c + 1} beat ${k + 1} scrolls sideways`); } }
-    if (heights.size !== 1) F(`${W}: page height changes between beats: ` + [...heights]); if (tops.size !== 1) F(`${W}: the board moves between beats: ` + [...tops]);
+      if (await pg.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) F(`${W}: card ${c + 1} beat ${k + 1} scrolls sideways`); }
+      if (heights.size !== 1) F(`${W}: card ${c + 1}: page height changes between its beats: ` + [...heights]); if (tops.size !== 1) F(`${W}: card ${c + 1}: the board moves between its beats: ` + [...tops]); }
     if (W === 390 && total < 30) F('too few beats walked: ' + total);
   }
 

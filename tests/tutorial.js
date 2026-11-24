@@ -2,7 +2,7 @@
 const p=require('puppeteer-core');(async()=>{const site=await require('./site').start();const b=await p.launch({executablePath:process.env.CHROME,args:['--no-sandbox'],headless:'new'});
 const S=t=>new Promise(r=>setTimeout(r,t));const pg=await b.newPage();pg.on('pageerror',e=>console.log('ERR',e.message));
 await pg.setViewport({width:390,height:844,deviceScaleFactor:1,isMobile:true,hasTouch:true});await pg.goto(site.url('lessons/dominant-pentatonics/index.html'));await S(800);
-await pg.evaluate(()=>document.getElementById('nine-tutorial').click());await S(1000);
+await pg.evaluate(()=>document.getElementById('nine-settings-tutorial').click());await S(1000);
 const fails=[];const rows=[];
 for(let i=1;i<=13;i++){
  const title=await pg.evaluate(()=>document.querySelector('[role=dialog] h2').innerText);

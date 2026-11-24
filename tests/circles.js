@@ -22,7 +22,7 @@ for(let c=0;c<cards;c++){await pg.evaluate(c=>document.querySelectorAll('nav[ari
  for(let k=0;k<nb;k++){fails.push(...await scan('card '+(c+1)+' beat '+(k+1)));if(k<nb-1){await click('Continue');await S(450);}}}
 await pg.evaluate(()=>document.querySelectorAll('nav[aria-label="Lesson steps"] button')[0].click());await S(450);
 await click('Helps to know');await S(300);fails.push(...await scan('helps to know'));
-await pg.evaluate(()=>document.getElementById('nine-tutorial').click());await S(800);
+await pg.evaluate(()=>document.getElementById('nine-settings-tutorial').click());await S(800);
 for(let i=0;i<13;i++){fails.push(...await scan('tutorial '+(i+1)));await pg.evaluate(()=>[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='Next'||b.textContent==='Done').click());await S(700);}
 console.log(fails.length?fails.join('\n'):'ok');console.log('fails',fails.length);
 await b.close();site.close();})();

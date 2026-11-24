@@ -32,7 +32,9 @@ A practical guide for a future session asked to build a new lesson. It records w
 ## 3. Design rules Jordan enforces (and why)
 
 - Quiet and uncluttered: no boxed pills or legends, text tabs, small controls. Busy screens get called cluttered. If in doubt, leave it out.
-- Constant page height between steps and beats: every step has the same rows (caption, button, label pill) even if some are empty. Test it.
+- The board never moves between the beats of one step: the text card is as tall as the step's longest beat (every beat is laid out invisibly in the same cell). The height may differ between steps. Test it per step.
+- On phones Back / Continue is a fixed bar at the bottom and the header is one compact strip. "Helps to know", "Show tutorial" and "Further reading" live in Settings, not under the header.
+- No grey caption rows or extra subtitles on guided steps; Explore shows no subtitle under the chord name.
 - The root is always a red dot (R). A rootless chord shows the missing root as a dashed red ring, never played.
 - Every note and interval in text is a circle. Roots are red; other dots are ink. In Explore the Drop 2 dots are ink, not teal.
 - Chord names are set as a whole in MuseJazz Text (root letter, accidentals, quality, slash bass): `titleNodes` wraps them in `data-chord` spans, `scale` evens the size against the sans text (1.1 by default, 1 in the big title). Selected tabs use underline and full ink, never bold (the font has one weight).
